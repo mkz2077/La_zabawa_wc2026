@@ -1238,7 +1238,7 @@ function renderAdminUsers() {
   const canManageRoles = isSuperuser() || isAdminLoggedIn();
   el.innerHTML = createForm + `
     <table class="leaderboard-table" style="margin-top:8px">
-      <thead><tr><th>#</th><th>Username</th><th>Role</th><th>Points</th><th>Exact</th><th>Picks</th><th>Joined</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>Username</th><th>Role</th><th>PIN</th><th>Points</th><th>Exact</th><th>Picks</th><th>Joined</th><th></th></tr></thead>
       <tbody>
         ${sorted.map(([name, u], i) => {
           const picks  = Object.keys(u.predictions || {}).length;
@@ -1260,6 +1260,7 @@ function renderAdminUsers() {
               <td style="color:var(--text3)">${i+1}</td>
               <td><div class="lb-user"><div class="user-avatar" style="background:${u.color};width:28px;height:28px;font-size:11px">${name.slice(0,2).toUpperCase()}</div><strong>${esc(name)}</strong></div></td>
               <td>${roleBadge}</td>
+              <td><code style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:12px;letter-spacing:1px;color:var(--gold)">${esc(u.pin || '—')}</code></td>
               <td style="color:var(--gold);font-weight:800">${u.points || 0}</td>
               <td style="color:var(--green)">${u.exact || 0}</td>
               <td style="color:var(--text2)">${picks}</td>
