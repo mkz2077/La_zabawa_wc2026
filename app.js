@@ -4,7 +4,6 @@
 
 let TEAMS = {};      // { teamId: { name, iso2, group, host } }
 let MATCHES = [];    // all group stage matches
-let NEWS = [];
 let STATS = {};
 let currentUser = null;
 
@@ -56,12 +55,12 @@ function isMatchLocked(m) {
 async function init() {
   await loadData();
   restoreSession();
+  renderSidebarUser();
   setupNav();
   renderHome();
   renderSchedule();
   renderGroups();
   renderLeaderboard();
-  renderNews();
   renderStats();
   renderPicks();
   renderAdmin();
@@ -70,15 +69,13 @@ async function init() {
 
 async function loadData() {
   try {
-    const [teamsRes, matchesRes, newsRes, statsRes] = await Promise.all([
+    const [teamsRes, matchesRes, statsRes] = await Promise.all([
       fetch('data/teams.json'),
       fetch('data/matches.json'),
-      fetch('data/news.json'),
       fetch('data/stats.json'),
     ]);
     const teamsJson   = await teamsRes.json();
     const matchesJson = await matchesRes.json();
-    NEWS  = await newsRes.json();
     STATS = await statsRes.json();
     // Merge admin-entered results with file data
     const adminRes = JSON.parse(localStorage.getItem(STORAGE.ADMIN_RESULTS) || '{}');
@@ -808,27 +805,6 @@ function renderLeaderboard() {
   `;
 }
 
-// ── NEWS ──────────────────────────────────────────
-function renderNews() {
-  const el = document.getElementById('newsFeed');
-  if (!NEWS.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📰</div><h3>No news yet</h3><p>Add articles to data/news.json</p></div>`;
-    return;
-  }
-  el.innerHTML = NEWS.map(n => `
-    <div class="news-card">
-      <div class="news-card-top">
-        <span class="news-emoji">${n.image}</span>
-        <div>
-          <span class="news-cat">${n.category}</span>
-          <div class="news-title">${esc(n.title)}</div>
-        </div>
-      </div>
-      <div class="news-body">${esc(n.summary)}</div>
-      <div class="news-date">${fmtDateLong(n.date)}</div>
-    </div>
-  `).join('');
-}
 
 // ── STATS ─────────────────────────────────────────
 function renderStats() {
