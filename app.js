@@ -4,8 +4,8 @@
 
 // ── SUPABASE CONFIG ───────────────────────────────
 // Replace these two values with your Supabase project credentials
-const SUPA_URL = 'YOUR_SUPABASE_URL';
-const SUPA_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPA_URL = 'https://uvuitxfoxmpfkvftfaww.supabase.co';
+const SUPA_KEY = 'sb_publishable_Eom9ozKXnhJhcLlkuF49Dg_3hv6zXy4';
 let supa = null;
 
 // ── STATE ─────────────────────────────────────────
