@@ -1,0 +1,76 @@
+{
+  "groups": {
+    "A": [
+      { "id": "MEX", "name": "Mexico",        "iso2": "mx",     "host": true  },
+      { "id": "KOR", "name": "South Korea",   "iso2": "kr",     "host": false },
+      { "id": "RSA", "name": "South Africa",  "iso2": "za",     "host": false },
+      { "id": "CZE", "name": "Czechia",       "iso2": "cz",     "host": false }
+    ],
+    "B": [
+      { "id": "CAN", "name": "Canada",        "iso2": "ca",     "host": true  },
+      { "id": "SUI", "name": "Switzerland",   "iso2": "ch",     "host": false },
+      { "id": "QAT", "name": "Qatar",         "iso2": "qa",     "host": false },
+      { "id": "BIH", "name": "Bosnia & Herz.","iso2": "ba",     "host": false }
+    ],
+    "C": [
+      { "id": "BRA", "name": "Brazil",        "iso2": "br",     "host": false },
+      { "id": "MAR", "name": "Morocco",       "iso2": "ma",     "host": false },
+      { "id": "HAI", "name": "Haiti",         "iso2": "ht",     "host": false },
+      { "id": "SCO", "name": "Scotland",      "iso2": "gb-sct", "host": false }
+    ],
+    "D": [
+      { "id": "USA", "name": "United States", "iso2": "us",     "host": true  },
+      { "id": "PAR", "name": "Paraguay",      "iso2": "py",     "host": false },
+      { "id": "AUS", "name": "Australia",     "iso2": "au",     "host": false },
+      { "id": "TUR", "name": "Turkey",        "iso2": "tr",     "host": false }
+    ],
+    "E": [
+      { "id": "GER", "name": "Germany",       "iso2": "de",     "host": false },
+      { "id": "CUW", "name": "Curaçao",       "iso2": "cw",     "host": false },
+      { "id": "CIV", "name": "Ivory Coast",   "iso2": "ci",     "host": false },
+      { "id": "ECU", "name": "Ecuador",       "iso2": "ec",     "host": false }
+    ],
+    "F": [
+      { "id": "NED", "name": "Netherlands",   "iso2": "nl",     "host": false },
+      { "id": "JPN", "name": "Japan",         "iso2": "jp",     "host": false },
+      { "id": "TUN", "name": "Tunisia",       "iso2": "tn",     "host": false },
+      { "id": "SWE", "name": "Sweden",        "iso2": "se",     "host": false }
+    ],
+    "G": [
+      { "id": "BEL", "name": "Belgium",       "iso2": "be",     "host": false },
+      { "id": "EGY", "name": "Egypt",         "iso2": "eg",     "host": false },
+      { "id": "IRN", "name": "Iran",          "iso2": "ir",     "host": false },
+      { "id": "NZL", "name": "New Zealand",   "iso2": "nz",     "host": false }
+    ],
+    "H": [
+      { "id": "ESP", "name": "Spain",         "iso2": "es",     "host": false },
+      { "id": "CPV", "name": "Cape Verde",    "iso2": "cv",     "host": false },
+      { "id": "KSA", "name": "Saudi Arabia",  "iso2": "sa",     "host": false },
+      { "id": "URU", "name": "Uruguay",       "iso2": "uy",     "host": false }
+    ],
+    "I": [
+      { "id": "FRA", "name": "France",        "iso2": "fr",     "host": false },
+      { "id": "SEN", "name": "Senegal",       "iso2": "sn",     "host": false },
+      { "id": "NOR", "name": "Norway",        "iso2": "no",     "host": false },
+      { "id": "IRQ", "name": "Iraq",          "iso2": "iq",     "host": false }
+    ],
+    "J": [
+      { "id": "ARG", "name": "Argentina",     "iso2": "ar",     "host": false },
+      { "id": "ALG", "name": "Algeria",       "iso2": "dz",     "host": false },
+      { "id": "AUT", "name": "Austria",       "iso2": "at",     "host": false },
+      { "id": "JOR", "name": "Jordan",        "iso2": "jo",     "host": false }
+    ],
+    "K": [
+      { "id": "POR", "name": "Portugal",      "iso2": "pt",     "host": false },
+      { "id": "UZB", "name": "Uzbekistan",    "iso2": "uz",     "host": false },
+      { "id": "COL", "name": "Colombia",      "iso2": "co",     "host": false },
+      { "id": "COD", "name": "DR Congo",      "iso2": "cd",     "host": false }
+    ],
+    "L": [
+      { "id": "ENG", "name": "England",       "iso2": "gb-eng", "host": false },
+      { "id": "CRO", "name": "Croatia",       "iso2": "hr",     "host": false },
+      { "id": "GHA", "name": "Ghana",         "iso2": "gh",     "host": false },
+      { "id": "PAN", "name": "Panama",        "iso2": "pa",     "host": false }
+    ]
+  }
+}

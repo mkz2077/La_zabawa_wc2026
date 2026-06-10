@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "title": "Erling Haaland ready to lead Norway's charge at WC 2026",
+    "summary": "Norway's star striker Erling Haaland says he has never felt more prepared heading into a World Cup. 'This is our moment,' Haaland told reporters at a pre-tournament press conference.",
+    "team": "NOR",
+    "date": "2026-05-10",
+    "image": "⚽",
+    "category": "Player News"
+  },
+  {
+    "id": 2,
+    "title": "France name final 26-man squad for World Cup",
+    "summary": "Didier Deschamps has confirmed France's squad for the 2026 World Cup, featuring Kylian Mbappé as captain. Several surprise inclusions and notable absences have sparked debate among fans.",
+    "team": "FRA",
+    "date": "2026-05-09",
+    "image": "🇫🇷",
+    "category": "Squad News"
+  },
+  {
+    "id": 3,
+    "title": "Brazil unveil new kit ahead of North American adventure",
+    "summary": "The Seleção have revealed their iconic yellow home and blue away kits for the 2026 World Cup. Manager Carlos Ancelotti described the squad as 'the most balanced in years'.",
+    "team": "BRA",
+    "date": "2026-05-08",
+    "image": "🇧🇷",
+    "category": "Team News"
+  },
+  {
+    "id": 4,
+    "title": "Host nation USA confident of deep run",
+    "summary": "The USMNT have shown impressive form in warm-up friendlies, defeating Germany 2-1 in their final pre-tournament test. Coach Gregg Berhalter says the squad is 'peaking at the right time'.",
+    "team": "USA",
+    "date": "2026-05-07",
+    "image": "🇺🇸",
+    "category": "Team News"
+  },
+  {
+    "id": 5,
+    "title": "Argentina seek to defend their crown",
+    "summary": "Lionel Scaloni's Argentina arrive as defending champions, with Lionel Messi expected to play his final World Cup. The squad looks sharp after a perfect qualification campaign.",
+    "team": "ARG",
+    "date": "2026-05-06",
+    "image": "🇦🇷",
+    "category": "Team News"
+  },
+  {
+    "id": 6,
+    "title": "England's golden generation faces ultimate test",
+    "summary": "With a squad boasting depth across every position, many pundits are tipping England as dark horses for the trophy. Manager Gareth Southgate is cautiously optimistic.",
+    "team": "ENG",
+    "date": "2026-05-05",
+    "image": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+    "category": "Team News"
+  },
+  {
+    "id": 7,
+    "title": "Germany rebuilding with exciting young talent",
+    "summary": "After a disappointing 2022 exit, Germany have rebuilt around a core of Bundesliga youngsters. Florian Wirtz and Jamal Musiala are expected to be the creative heartbeat of the side.",
+    "team": "GER",
+    "date": "2026-05-04",
+    "image": "🇩🇪",
+    "category": "Team News"
+  },
+  {
+    "id": 8,
+    "title": "Morocco set to cause more upsets",
+    "summary": "After their historic 2022 semi-final run, Morocco are back and even better. With a settled squad and experienced manager, the Atlas Lions are everyone's pick for a deep tournament run.",
+    "team": "MAR",
+    "date": "2026-05-03",
+    "image": "🇲🇦",
+    "category": "Team News"
+  }
+]

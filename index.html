@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>La Zabawa – World Cup 2026</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-trophy">🏆</span>
+      <div class="logo-title">La Zabawa</div>
+      <div class="logo-sub">World Cup 2026</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-section="home">
+        <span class="nav-icon">🏠</span><span>Home</span>
+      </div>
+      <div class="nav-item" data-section="schedule">
+        <span class="nav-icon">📅</span><span>Schedule</span>
+      </div>
+      <div class="nav-item" data-section="groups">
+        <span class="nav-icon">🗂️</span><span>Groups</span>
+      </div>
+      <div class="nav-item" data-section="picks">
+        <span class="nav-icon">🎯</span><span>My Picks</span>
+      </div>
+      <div class="nav-item" data-section="leaderboard">
+        <span class="nav-icon">🏅</span><span>Leaderboard</span>
+      </div>
+      <div class="nav-item" data-section="stats">
+        <span class="nav-icon">📊</span><span>Statistics</span>
+      </div>
+      <div class="nav-item" data-section="news">
+        <span class="nav-icon">📰</span><span>News</span>
+      </div>
+      <div class="nav-item" data-section="admin" style="margin-top:auto;border-top:1px solid var(--border)">
+        <span class="nav-icon">🔧</span><span>Admin</span>
+      </div>
+    </nav>
+    <div class="sidebar-user" id="sidebarUser">
+      <div class="no-user" onclick="openLoginModal()">⚽ Sign in to predict</div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN CONTENT ── -->
+  <main class="main-content">
+
+    <!-- HOME -->
+    <section class="section active" id="section-home">
+      <div class="hero">
+        <div class="hero-ball-wrap" aria-hidden="true">
+          <svg class="hero-ball-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="ballGrad" cx="35%" cy="30%" r="65%">
+                <stop offset="0%" stop-color="#f5f5f5"/>
+                <stop offset="65%" stop-color="#c8c8c8"/>
+                <stop offset="100%" stop-color="#888"/>
+              </radialGradient>
+              <radialGradient id="ballGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="rgba(255,215,0,0.25)"/>
+                <stop offset="100%" stop-color="rgba(255,215,0,0)"/>
+              </radialGradient>
+              <filter id="bshadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="rgba(0,0,0,0.7)"/>
+              </filter>
+              <clipPath id="bclip"><circle cx="100" cy="100" r="90"/></clipPath>
+            </defs>
+            <circle cx="100" cy="100" r="98" fill="url(#ballGlow)"/>
+            <circle cx="100" cy="100" r="90" fill="url(#ballGrad)" filter="url(#bshadow)"/>
+            <g clip-path="url(#bclip)" fill="#111827" stroke="#2a2a2a" stroke-width="1.2">
+              <polygon points="100,62 118,75 111,96 89,96 82,75"/>
+              <polygon points="100,14 113,26 108,44 92,44 87,26"/>
+              <polygon points="154,44 167,58 161,78 143,76 139,58"/>
+              <polygon points="175,97 182,117 170,133 153,127 151,108"/>
+              <polygon points="148,152 155,170 140,181 123,173 121,153"/>
+              <polygon points="52,152 45,170 60,181 77,173 79,153"/>
+              <polygon points="25,97 18,117 30,133 47,127 49,108"/>
+              <polygon points="46,44 33,58 39,78 57,76 61,58"/>
+            </g>
+            <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(0,0,0,0.25)" stroke-width="2"/>
+            <ellipse cx="76" cy="68" rx="22" ry="15" fill="rgba(255,255,255,0.3)" transform="rotate(-25,76,68)"/>
+          </svg>
+          <div class="hero-ball-ring"></div>
+        </div>
+        <div class="hero-content">
+          <span class="hero-badge">🌍 La Zabawa · World Cup 2026</span>
+          <h1>FIFA <span>World Cup</span><br>2026</h1>
+          <p class="hero-dates">June 11 – July 19, 2026 &nbsp;·&nbsp; 48 teams &nbsp;·&nbsp; 104 matches</p>
+          <div class="hero-hosts">
+            <span class="host-pill">🇺🇸 United States</span>
+            <span class="host-pill">🇨🇦 Canada</span>
+            <span class="host-pill">🇲🇽 Mexico</span>
+          </div>
+        </div>
+        <div class="hero-field-lines" aria-hidden="true">
+          <div class="hfl-center-circle"></div>
+          <div class="hfl-center-dot"></div>
+        </div>
+      </div>
+
+      <div class="stat-tiles">
+        <div class="stat-tile"><div class="stat-tile-val">48</div><div class="stat-tile-label">Teams</div></div>
+        <div class="stat-tile"><div class="stat-tile-val">12</div><div class="stat-tile-label">Groups</div></div>
+        <div class="stat-tile"><div class="stat-tile-val">104</div><div class="stat-tile-label">Matches</div></div>
+        <div class="stat-tile"><div class="stat-tile-val" id="homePredCount">0</div><div class="stat-tile-label">Your Picks</div></div>
+      </div>
+
+      <div id="specialPicksHome"></div>
+
+      <div class="countdown card" id="countdown">
+        <div>
+          <div class="countdown-label">Tournament starts in</div>
+          <div class="countdown-units">
+            <div class="cd-unit"><div class="cd-val" id="cdDays">--</div><div class="cd-lbl">days</div></div>
+            <div class="cd-unit"><div class="cd-val" id="cdHours">--</div><div class="cd-lbl">hrs</div></div>
+            <div class="cd-unit"><div class="cd-val" id="cdMins">--</div><div class="cd-lbl">min</div></div>
+            <div class="cd-unit"><div class="cd-val" id="cdSecs">--</div><div class="cd-lbl">sec</div></div>
+          </div>
+        </div>
+        <div class="countdown-match">
+          <div class="countdown-match-label">Opening match</div>
+          <div class="countdown-match-teams">🇲🇽 Mexico vs South Africa 🇿🇦</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Jun 11 · Estadio Azteca, Mexico City</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Upcoming Matches</div>
+          <div id="homeUpcoming">Loading…</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Top of Leaderboard</div>
+          <div id="homeLeaderboard">Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCHEDULE -->
+    <section class="section" id="section-schedule">
+      <div class="page-header">
+        <h1>⚽ Match Schedule</h1>
+        <p>All 72 group stage matches. Enter your predictions before kickoff.</p>
+      </div>
+      <div class="schedule-filters" id="scheduleFilters">
+        <button class="filter-btn active" data-group="all">All Groups</button>
+      </div>
+      <div id="scheduleList">Loading…</div>
+    </section>
+
+    <!-- GROUPS -->
+    <section class="section" id="section-groups">
+      <div class="page-header">
+        <h1>🗂️ Group Standings</h1>
+        <p>Top 2 + 8 best 3rd-place teams advance to Round of 32.</p>
+      </div>
+      <div class="groups-grid" id="groupsGrid">Loading…</div>
+      <div style="margin-top:16px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;display:flex;gap:20px;flex-wrap:wrap;">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);margin-right:5px;"></span>Advance (1st)</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--blue);margin-right:5px;"></span>Advance (2nd)</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--gold2);margin-right:5px;"></span>Possible 3rd</span>
+      </div>
+    </section>
+
+    <!-- MY PICKS -->
+    <section class="section" id="section-picks">
+      <div class="page-header">
+        <h1>🎯 My Picks</h1>
+        <p>Predict every match. 3 pts for exact score, 1 pt for correct winner/draw.</p>
+      </div>
+      <div id="picksContent">
+        <div class="picks-login-prompt">
+          <div class="big-icon">🔐</div>
+          <h3>Sign in to start predicting</h3>
+          <p style="color:var(--text2);margin-bottom:20px">Create a username to save your picks and join the leaderboard.</p>
+          <button class="btn btn-primary" onclick="openLoginModal()">Create Username</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- LEADERBOARD -->
+    <section class="section" id="section-leaderboard">
+      <div class="page-header">
+        <h1>🏅 Leaderboard</h1>
+        <p>Rankings across all players. Updated as match results come in.</p>
+      </div>
+      <div class="card">
+        <div id="leaderboardContent">Loading…</div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="section" id="section-stats">
+      <div class="page-header">
+        <h1>📊 Statistics</h1>
+        <p>Live tournament statistics updated after each match.</p>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Top Scorers</div>
+          <div id="topScorers">
+            <div class="empty-state">
+              <div class="empty-state-icon">⚽</div>
+              <h3>Tournament not started</h3>
+              <p>Scorer stats will appear here once matches begin on June 11.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Top Assists</div>
+          <div id="topAssists">
+            <div class="empty-state">
+              <div class="empty-state-icon">🎯</div>
+              <h3>Tournament not started</h3>
+              <p>Assist stats will appear here once matches begin on June 11.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">Results Summary</div>
+        <div id="resultsSummary" style="color:var(--text2);font-size:14px;padding:8px 0">
+          Matches played: <span id="statsPlayed" style="color:var(--gold);font-weight:700">0</span> / 72
+          &nbsp;·&nbsp; Goals scored: <span id="statsGoals" style="color:var(--gold);font-weight:700">0</span>
+          &nbsp;·&nbsp; Avg goals/match: <span id="statsAvg" style="color:var(--gold);font-weight:700">–</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADMIN -->
+    <section class="section" id="section-admin">
+      <div class="page-header">
+        <h1>🔧 Admin Panel</h1>
+        <p>Enter results, manage users and prediction locks.</p>
+      </div>
+      <div id="adminContent"></div>
+    </section>
+
+    <!-- NEWS -->
+    <section class="section" id="section-news">
+      <div class="page-header">
+        <h1>📰 News Feed</h1>
+        <p>Latest updates from teams and players. Edit <code>data/news.json</code> to add articles.</p>
+      </div>
+      <div class="news-grid" id="newsFeed">Loading…</div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ── LOGIN MODAL ── -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal">
+    <div class="modal-logo">⚽</div>
+    <h2>La Zabawa</h2>
+    <p id="loginModalMsg">Enter your username to join the predictions.</p>
+    <input class="modal-input" id="usernameInput" type="text" placeholder="Your username…" maxlength="20" autocomplete="off">
+    <div class="modal-error" id="loginError">Username not found. Ask an admin to create your account.</div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="loginExisting()">Login</button>
+      <button class="btn btn-ghost" onclick="closeLoginModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
