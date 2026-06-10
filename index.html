@@ -5,8 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>La Zabawa – World Cup 2026</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+
+<!-- ── LOADING OVERLAY ── -->
+<div id="loadingOverlay" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <div style="font-size:48px;animation:ballFloat 1s ease-in-out infinite">⚽</div>
+  <div style="font-size:13px;color:var(--text3);letter-spacing:2px;text-transform:uppercase">Connecting…</div>
+</div>
 
 <div class="app-shell">
   <!-- ── SIDEBAR ── -->
@@ -250,9 +257,10 @@
   <div class="modal">
     <div class="modal-logo">⚽</div>
     <h2>La Zabawa</h2>
-    <p id="loginModalMsg">Enter your username to join the predictions.</p>
-    <input class="modal-input" id="usernameInput" type="text" placeholder="Your username…" maxlength="20" autocomplete="off">
-    <div class="modal-error" id="loginError">Username not found. Ask an admin to create your account.</div>
+    <p id="loginModalMsg">Enter your credentials to join.</p>
+    <input class="modal-input" id="usernameInput" type="text" placeholder="Username…" maxlength="20" autocomplete="off">
+    <input class="modal-input" id="pinInput" type="password" placeholder="PIN…" maxlength="20" autocomplete="off">
+    <div class="modal-error" id="loginError">Invalid username or PIN.</div>
     <div style="display:flex;gap:10px">
       <button class="btn btn-primary" onclick="loginExisting()">Login</button>
       <button class="btn btn-ghost" onclick="closeLoginModal()">Cancel</button>

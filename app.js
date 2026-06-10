@@ -2,19 +2,171 @@
 //  WC 2026 Score Predictor — Main App
 // ══════════════════════════════════════════════════
 
-let TEAMS = {};      // { teamId: { name, iso2, group, host } }
-let MATCHES = [];    // all group stage matches
-let STATS = {};
+// ── SUPABASE CONFIG ───────────────────────────────
+// Replace these two values with your Supabase project credentials
+const SUPA_URL = 'YOUR_SUPABASE_URL';
+const SUPA_KEY = 'YOUR_SUPABASE_ANON_KEY';
+let supa = null;
+
+// ── STATE ─────────────────────────────────────────
+let TEAMS   = {};
+let MATCHES = [];
+let STATS   = {};
 let currentUser = null;
 
+// In-memory cache (source of truth, loaded from Supabase)
+let _users       = {};   // { username: { color, role, pin, championPick, topScorerPick, created } }
+let _predictions = {};   // { username: { matchId: { home, away } } }
+let _results     = {};   // { matchId: { home, away } }
+let _champion    = null; // teamId or null
+let _topScorer   = null; // player name or null
+
+// LocalStorage: only admin session + unlocks (not shared across users)
 const STORAGE = {
-  USERS:         'wc2026_users',
   SESSION:       'wc2026_session',
   ADMIN_SESSION: 'wc2026_admin',
-  ADMIN_RESULTS: 'wc2026_results',
   ADMIN_UNLOCKS: 'wc2026_unlocks',
   ADMIN_PWD:     'wc2026_admin_pwd',
 };
+
+// ── SUPABASE DB OPERATIONS ────────────────────────
+async function dbInit() {
+  supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+  const [usersRes, predsRes, resultsRes, settingsRes] = await Promise.all([
+    supa.from('users').select('*'),
+    supa.from('predictions').select('*'),
+    supa.from('match_results').select('*'),
+    supa.from('app_settings').select('*'),
+  ]);
+  _users = {};
+  (usersRes.data || []).forEach(u => {
+    _users[u.username] = {
+      color: u.color, role: u.role || 'member', pin: u.pin,
+      championPick: u.champion_pick || null, topScorerPick: u.top_scorer_pick || null,
+      created: new Date(u.created_at).getTime(),
+    };
+  });
+  _predictions = {};
+  (predsRes.data || []).forEach(p => {
+    if (!_predictions[p.username]) _predictions[p.username] = {};
+    _predictions[p.username][p.match_id] = { home: p.home_score, away: p.away_score };
+  });
+  _results = {};
+  (resultsRes.data || []).forEach(r => { _results[r.match_id] = { home: r.home_score, away: r.away_score }; });
+  mergeResultsIntoMatches();
+  _champion = null; _topScorer = null;
+  (settingsRes.data || []).forEach(s => {
+    if (s.key === 'champion')   _champion  = s.value;
+    if (s.key === 'top_scorer') _topScorer = s.value;
+  });
+}
+
+function mergeResultsIntoMatches() {
+  MATCHES.forEach(m => {
+    const r = _results[m.id];
+    m.homeScore = r ? r.home : null;
+    m.awayScore = r ? r.away : null;
+  });
+}
+
+async function dbSavePrediction(username, matchId, home, away) {
+  if (home === null) {
+    await supa.from('predictions').delete().eq('username', username).eq('match_id', matchId);
+  } else {
+    await supa.from('predictions').upsert(
+      { username, match_id: matchId, home_score: home, away_score: away, updated_at: new Date().toISOString() },
+      { onConflict: 'username,match_id' }
+    );
+  }
+}
+
+async function dbSaveResult(matchId, home, away) {
+  if (home === null) {
+    await supa.from('match_results').delete().eq('match_id', matchId);
+  } else {
+    await supa.from('match_results').upsert({ match_id: matchId, home_score: home, away_score: away }, { onConflict: 'match_id' });
+  }
+}
+
+async function dbCreateUser(username, role, pin) {
+  if (Object.keys(_users).some(u => u.toLowerCase() === username.toLowerCase())) return { error: 'Username already taken.' };
+  const color = AVATAR_COLORS[Object.keys(_users).length % AVATAR_COLORS.length];
+  const { error } = await supa.from('users').insert({ username, color, role: role || 'member', pin });
+  if (error) return { error: error.message };
+  _users[username] = { color, role: role || 'member', pin, championPick: null, topScorerPick: null, created: Date.now() };
+  return { ok: true };
+}
+
+async function dbDeleteUser(username) {
+  await supa.from('users').delete().eq('username', username);
+  delete _users[username];
+  delete _predictions[username];
+}
+
+async function dbUpdateUserField(username, field, value) {
+  const col = field === 'championPick' ? 'champion_pick' : field === 'topScorerPick' ? 'top_scorer_pick' : field;
+  await supa.from('users').update({ [col]: value }).eq('username', username);
+  if (_users[username]) _users[username][field] = value;
+}
+
+async function dbSetSetting(key, value) {
+  await supa.from('app_settings').upsert({ key, value }, { onConflict: 'key' });
+  if (key === 'champion')   _champion  = value;
+  if (key === 'top_scorer') _topScorer = value;
+}
+
+async function dbDeleteSetting(key) {
+  await supa.from('app_settings').delete().eq('key', key);
+  if (key === 'champion')   _champion  = null;
+  if (key === 'top_scorer') _topScorer = null;
+}
+
+// ── COMPAT SHIM ───────────────────────────────────
+// getUsers() returns the same structure as before, but computed from Supabase cache
+function getUsers() {
+  const out = {};
+  for (const [name, u] of Object.entries(_users)) {
+    const preds = _predictions[name] || {};
+    let pts = 0, exact = 0, winner = 0;
+    MATCHES.forEach(m => {
+      if (m.homeScore === null || m.awayScore === null) return;
+      const p = preds[m.id]; if (!p) return;
+      if (p.home === m.homeScore && p.away === m.awayScore) { pts += 3; exact++; }
+      else if (Math.sign(p.home - p.away) === Math.sign(m.homeScore - m.awayScore)) { pts += 1; winner++; }
+    });
+    if (_champion  && u.championPick  === _champion) pts += 4;
+    if (_topScorer && u.topScorerPick && u.topScorerPick.toLowerCase() === _topScorer.toLowerCase()) pts += 5;
+    out[name] = { ...u, predictions: preds, points: pts, exact, winner };
+  }
+  return out;
+}
+function saveUsers() { /* no-op: data lives in Supabase */ }
+function updateUserPoints() { /* no-op: computed on the fly in getUsers() */ }
+
+// ── REALTIME ──────────────────────────────────────
+function setupRealtime() {
+  supa.channel('live-updates')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'predictions' }, payload => {
+      const p = payload.new || payload.old;
+      if (payload.eventType === 'DELETE') {
+        if (_predictions[p.username]) delete _predictions[p.username][p.match_id];
+      } else {
+        if (!_predictions[p.username]) _predictions[p.username] = {};
+        _predictions[p.username][p.match_id] = { home: p.home_score, away: p.away_score };
+      }
+      renderLeaderboard(); renderHome();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'match_results' }, payload => {
+      const r = payload.new || payload.old;
+      if (payload.eventType === 'DELETE') { delete _results[r.match_id]; }
+      else { _results[r.match_id] = { home: r.home_score, away: r.away_score }; }
+      mergeResultsIntoMatches();
+      renderGroups(); renderLeaderboard(); renderStats(); renderHome();
+      renderScheduleList(document.querySelector('#scheduleFilters .filter-btn.active')?.dataset.group || 'all');
+      if (currentUser) renderPicks();
+    })
+    .subscribe();
+}
 
 const AVATAR_COLORS = [
   '#d4001e','#0077c8','#00875a','#7c3aed','#ea580c',
@@ -53,7 +205,10 @@ function isMatchLocked(m) {
 
 // ── INIT ──────────────────────────────────────────
 async function init() {
+  showLoadingOverlay(true);
   await loadData();
+  await dbInit();
+  showLoadingOverlay(false);
   restoreSession();
   renderSidebarUser();
   setupNav();
@@ -65,6 +220,11 @@ async function init() {
   renderPicks();
   renderAdmin();
   startCountdown();
+  setupRealtime();
+}
+
+function showLoadingOverlay(show) {
+  document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
 }
 
 async function loadData() {
@@ -77,23 +237,13 @@ async function loadData() {
     const teamsJson   = await teamsRes.json();
     const matchesJson = await matchesRes.json();
     STATS = await statsRes.json();
-    // Merge admin-entered results with file data
-    const adminRes = JSON.parse(localStorage.getItem(STORAGE.ADMIN_RESULTS) || '{}');
-    MATCHES = matchesJson.groupStage.map(m => {
-      const ar = adminRes[m.id];
-      return ar ? { ...m, homeScore: ar.home, awayScore: ar.away } : m;
-    });
-
-    // Flatten teams map
+    MATCHES = matchesJson.groupStage; // scores start null; overridden by dbInit → mergeResultsIntoMatches
     for (const [group, teams] of Object.entries(teamsJson.groups)) {
       teams.forEach(t => { TEAMS[t.id] = { ...t, group }; });
     }
   } catch (e) {
     console.error('Data load error:', e);
-    // If opened via file:// protocol without a server
-    if (location.protocol === 'file:') {
-      showFileProtocolWarning();
-    }
+    if (location.protocol === 'file:') showFileProtocolWarning();
   }
 }
 
@@ -128,84 +278,45 @@ function goTo(section) {
 }
 
 // ── USER / AUTH ───────────────────────────────────
-function getUsers() {
-  return JSON.parse(localStorage.getItem(STORAGE.USERS) || '{}');
-}
-function saveUsers(users) {
-  localStorage.setItem(STORAGE.USERS, JSON.stringify(users));
-}
 function getPredictions(username) {
-  const users = getUsers();
-  return (users[username] && users[username].predictions) || {};
+  return _predictions[username] || {};
 }
+
 function savePrediction(matchId, home, away) {
   if (!currentUser) return;
-  const users = getUsers();
-  if (!users[currentUser]) return;
-  if (!users[currentUser].predictions) users[currentUser].predictions = {};
+  if (!_predictions[currentUser]) _predictions[currentUser] = {};
   if (home === '' && away === '') {
-    delete users[currentUser].predictions[matchId];
+    delete _predictions[currentUser][matchId];
+    dbSavePrediction(currentUser, matchId, null, null).catch(console.error);
   } else {
-    users[currentUser].predictions[matchId] = { home: parseInt(home) || 0, away: parseInt(away) || 0 };
+    const h = parseInt(home) || 0, a = parseInt(away) || 0;
+    _predictions[currentUser][matchId] = { home: h, away: a };
+    dbSavePrediction(currentUser, matchId, h, a).catch(console.error);
   }
-  saveUsers(users);
-  updateUserPoints(currentUser, users);
   renderSidebarUser();
   updateHomePredCount();
 }
 
-function updateUserPoints(username, users) {
-  const preds = users[username].predictions || {};
-  let pts = 0, exact = 0, winner = 0;
-  MATCHES.forEach(m => {
-    if (m.homeScore === null || m.awayScore === null) return;
-    const p = preds[m.id];
-    if (!p) return;
-    if (p.home === m.homeScore && p.away === m.awayScore) { pts += 3; exact++; }
-    else if (Math.sign(p.home - p.away) === Math.sign(m.homeScore - m.awayScore)) { pts += 1; winner++; }
-  });
-  const champion  = localStorage.getItem(STORAGE_CHAMPION);
-  const topScorer = localStorage.getItem(STORAGE_TOP_SCORER);
-  if (champion  && users[username].championPick === champion) pts += 4;
-  if (topScorer && users[username].topScorerPick &&
-      users[username].topScorerPick.toLowerCase() === topScorer.toLowerCase()) pts += 5;
-  users[username].points = pts;
-  users[username].exact  = exact;
-  users[username].winner = winner;
-  saveUsers(users);
-}
-
 function calcLeaderboard() {
-  const users = getUsers();
-  // Recalculate all before returning
-  for (const u of Object.keys(users)) updateUserPoints(u, users);
-  saveUsers(getUsers()); // re-read after mutation
   return Object.entries(getUsers())
-    .map(([name, data]) => ({ name, points: data.points || 0, exact: data.exact || 0, winner: data.winner || 0, color: data.color }))
+    .map(([name, u]) => ({ name, points: u.points, exact: u.exact, winner: u.winner, color: u.color }))
     .sort((a, b) => b.points - a.points || b.exact - a.exact);
 }
 
 function loginExisting() {
-  const input = document.getElementById('usernameInput');
-  const name  = input.value.trim();
-  const err   = document.getElementById('loginError');
-  const users = getUsers();
-  if (!users[name]) { err.style.display = 'block'; return; }
+  const name = document.getElementById('usernameInput').value.trim();
+  const pin  = document.getElementById('pinInput').value.trim();
+  const err  = document.getElementById('loginError');
+  if (!_users[name]) { err.textContent = 'Username not found.'; err.style.display = 'block'; return; }
+  if (_users[name].pin && _users[name].pin !== pin) { err.textContent = 'Incorrect PIN.'; err.style.display = 'block'; return; }
   setSession(name);
   closeLoginModal();
 }
 
-function adminCreateUser(username, role) {
+async function adminCreateUser(username, role, pin) {
   if (!username || username.length < 2) return { error: 'Min. 2 characters.' };
-  const users = getUsers();
-  if (Object.keys(users).some(u => u.toLowerCase() === username.toLowerCase())) return { error: 'Username already taken.' };
-  const colorIdx = Object.keys(users).length % AVATAR_COLORS.length;
-  users[username] = { predictions: {}, points: 0, exact: 0, winner: 0, color: AVATAR_COLORS[colorIdx], created: Date.now(), role: role || 'member' };
-  saveUsers(users);
-  renderAdminUsers();
-  renderLeaderboard();
-  renderHome();
-  return { ok: true };
+  if (!pin || pin.length < 4) return { error: 'PIN must be at least 4 characters.' };
+  return await dbCreateUser(username, role, pin);
 }
 
 function setSession(name) {
@@ -215,12 +326,12 @@ function setSession(name) {
   renderPicks();
   renderLeaderboard();
   updateHomePredCount();
+  renderSpecialPicksHome();
 }
 
 function restoreSession() {
   const saved = localStorage.getItem(STORAGE.SESSION);
-  const users = getUsers();
-  if (saved && users[saved]) { currentUser = saved; renderSidebarUser(); }
+  if (saved && _users[saved]) { currentUser = saved; }
 }
 
 function logout() {
@@ -284,8 +395,9 @@ function openLoginModal(msg) {
 function closeLoginModal() {
   document.getElementById('loginModal').classList.remove('open');
   document.getElementById('usernameInput').value = '';
+  document.getElementById('pinInput').value = '';
   document.getElementById('loginError').style.display = 'none';
-  document.getElementById('loginModalMsg').textContent = 'Enter your username to join the predictions.';
+  document.getElementById('loginModalMsg').textContent = 'Enter your credentials to join.';
 }
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeLoginModal();
@@ -319,29 +431,22 @@ function startCountdown() {
 
 // ── SPECIAL PICKS ─────────────────────────────────
 const SPECIAL_LOCK_UTC = new Date('2026-06-11T22:00:00Z'); // 2h before first match
-const STORAGE_CHAMPION  = 'wc2026_champion';
-const STORAGE_TOP_SCORER = 'wc2026_top_scorer';
-
 function isSpecialPickLocked() { return Date.now() >= SPECIAL_LOCK_UTC.getTime(); }
 
-function saveSpecialPick(type, value) {
+async function saveSpecialPick(type, value) {
   if (!currentUser || isSpecialPickLocked()) return;
-  const users = getUsers();
-  if (!users[currentUser]) return;
-  users[currentUser][type] = value;
-  saveUsers(users);
-  updateUserPoints(currentUser, getUsers());
-  saveUsers(getUsers());
+  if (_users[currentUser]) _users[currentUser][type] = value;
   renderSpecialPicksHome();
   renderSidebarUser();
+  await dbUpdateUserField(currentUser, type, value);
 }
 
 function renderSpecialPicksHome() {
   const el = document.getElementById('specialPicksHome');
   if (!el) return;
   const locked = isSpecialPickLocked();
-  const champion  = localStorage.getItem(STORAGE_CHAMPION);
-  const topScorer = localStorage.getItem(STORAGE_TOP_SCORER);
+  const champion  = _champion;
+  const topScorer = _topScorer;
   const preds = currentUser ? getPredictions(currentUser) : {};
   const u = currentUser ? (getUsers()[currentUser] || {}) : {};
 
@@ -896,7 +1001,7 @@ function logoutAdmin() { localStorage.removeItem(STORAGE.ADMIN_SESSION); renderA
 // ── ROLES ─────────────────────────────────────────
 function currentUserRole() {
   if (!currentUser) return null;
-  return getUsers()[currentUser]?.role || 'member';
+  return (_users[currentUser]?.role) || 'member';
 }
 
 function canAccessAdmin() {
@@ -908,48 +1013,38 @@ function isSuperuser() {
   return currentUserRole() === 'superuser';
 }
 
-function setUserRole(username, role) {
-  const users = getUsers();
-  if (!users[username]) return;
-  users[username].role = role;
-  saveUsers(users);
+async function setUserRole(username, role) {
+  await dbUpdateUserField(username, 'role', role);
   renderAdminUsers();
   renderSidebarUser();
 }
 
-function designateSuperuser(username) {
+async function designateSuperuser(username) {
   if (!confirm(`Make "${username}" the Superuser?\nAny existing Superuser will be demoted to Admin.`)) return;
-  const users = getUsers();
-  Object.keys(users).forEach(u => { if (users[u].role === 'superuser') users[u].role = 'admin'; });
-  users[username].role = 'superuser';
-  saveUsers(users);
+  for (const [name, u] of Object.entries(_users)) {
+    if (u.role === 'superuser') await dbUpdateUserField(name, 'role', 'admin');
+  }
+  await dbUpdateUserField(username, 'role', 'superuser');
   renderAdminUsers();
   renderSidebarUser();
 }
 
-function getAdminResults() { return JSON.parse(localStorage.getItem(STORAGE.ADMIN_RESULTS) || '{}'); }
+function getAdminResults() { return _results; }
 function getAdminUnlocks() { return JSON.parse(localStorage.getItem(STORAGE.ADMIN_UNLOCKS) || '[]'); }
 
-function saveAdminResult(matchId, home, away) {
-  const results = getAdminResults();
-  if (home === '' && away === '') { delete results[matchId]; }
-  else { results[matchId] = { home: parseInt(home), away: parseInt(away) }; }
-  localStorage.setItem(STORAGE.ADMIN_RESULTS, JSON.stringify(results));
-  const idx = MATCHES.findIndex(m => m.id === matchId);
-  if (idx >= 0) {
-    MATCHES[idx].homeScore = home === '' ? null : parseInt(home);
-    MATCHES[idx].awayScore = away === '' ? null : parseInt(away);
-  }
-  const users = getUsers();
-  for (const u of Object.keys(users)) updateUserPoints(u, users);
-  saveUsers(getUsers());
+async function saveAdminResult(matchId, home, away) {
+  const h = home === '' ? null : parseInt(home);
+  const a = away === '' ? null : parseInt(away);
+  if (h === null) { delete _results[matchId]; } else { _results[matchId] = { home: h, away: a }; }
+  mergeResultsIntoMatches();
+  await dbSaveResult(matchId, h, a);
   renderGroups(); renderLeaderboard(); renderStats(); renderHome();
   if (currentUser) renderPicks();
   const activeGroup = document.querySelector('#scheduleFilters .filter-btn.active')?.dataset.group || 'all';
   renderScheduleList(activeGroup);
 }
 
-function clearAdminResult(matchId) { saveAdminResult(matchId, '', ''); renderAdminMatches(); }
+async function clearAdminResult(matchId) { await saveAdminResult(matchId, '', ''); renderAdminMatches(); }
 
 function toggleAdminUnlock(matchId) {
   const unlocks = getAdminUnlocks();
@@ -962,9 +1057,9 @@ function toggleAdminUnlock(matchId) {
   if (currentUser) renderPicks();
 }
 
-function deleteUser(username) {
+async function deleteUser(username) {
   if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
-  const users = getUsers(); delete users[username]; saveUsers(users);
+  await dbDeleteUser(username);
   if (currentUser === username) logout();
   renderAdminUsers(); renderLeaderboard(); renderHome();
 }
@@ -1099,13 +1194,14 @@ function adminMatchRow(m, unlocks, now) {
     </div>`;
 }
 
-function submitAdminCreateUser() {
+async function submitAdminCreateUser() {
   const nameEl = document.getElementById('newUserName');
   const roleEl = document.getElementById('newUserRole');
+  const pinEl  = document.getElementById('newUserPin');
   const msgEl  = document.getElementById('newUserMsg');
-  const result = adminCreateUser(nameEl.value.trim(), roleEl.value);
+  const result = await adminCreateUser(nameEl.value.trim(), roleEl.value, pinEl.value.trim());
   if (result.error) { msgEl.style.cssText='display:block;color:var(--red2)'; msgEl.textContent=result.error; }
-  else { nameEl.value=''; msgEl.style.cssText='display:block;color:var(--green)'; msgEl.textContent='User created!'; renderAdminUsers(); }
+  else { nameEl.value=''; pinEl.value=''; msgEl.style.cssText='display:block;color:var(--green)'; msgEl.textContent='User created!'; renderAdminUsers(); }
 }
 
 function renderAdminUsers() {
@@ -1116,9 +1212,13 @@ function renderAdminUsers() {
     <div class="card" style="margin-bottom:16px">
       <div class="card-title">Create New User</div>
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-        <div style="flex:1;min-width:160px">
+        <div style="flex:1;min-width:140px">
           <div style="font-size:11px;color:var(--text3);margin-bottom:5px">Username</div>
           <input class="modal-input" id="newUserName" type="text" placeholder="Username…" maxlength="20" style="margin:0">
+        </div>
+        <div style="min-width:120px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:5px">PIN (min 4 chars)</div>
+          <input class="modal-input" id="newUserPin" type="text" placeholder="e.g. 1234" maxlength="20" style="margin:0">
         </div>
         <div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:5px">Role</div>
@@ -1174,8 +1274,8 @@ function renderAdminUsers() {
 function renderAdminSettings() {
   const el = document.getElementById('adminTabContent');
   if (!el) return;
-  const curChamp  = localStorage.getItem(STORAGE_CHAMPION) || '';
-  const curScorer = localStorage.getItem(STORAGE_TOP_SCORER) || '';
+  const curChamp  = _champion  || '';
+  const curScorer = _topScorer || '';
   const teamOptions = Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
   el.innerHTML = `
     <div class="grid-2" style="gap:16px;margin-top:8px">
@@ -1206,19 +1306,16 @@ function renderAdminSettings() {
     </div>`;
 }
 
-function setAdminSpecialResult(type) {
+async function setAdminSpecialResult(type) {
   if (type === 'champion') {
     const val = document.getElementById('adminChampSelect').value;
-    if (val) { localStorage.setItem(STORAGE_CHAMPION, val); }
-    else { localStorage.removeItem(STORAGE_CHAMPION); }
+    if (val) await dbSetSetting('champion', val);
+    else await dbDeleteSetting('champion');
   } else {
     const val = document.getElementById('adminScorerInput').value.trim();
-    if (val) { localStorage.setItem(STORAGE_TOP_SCORER, val); }
-    else { localStorage.removeItem(STORAGE_TOP_SCORER); }
+    if (val) await dbSetSetting('top_scorer', val);
+    else await dbDeleteSetting('top_scorer');
   }
-  const users = getUsers();
-  for (const u of Object.keys(users)) updateUserPoints(u, users);
-  saveUsers(getUsers());
   renderLeaderboard();
   renderHome();
   renderAdminSettings();
