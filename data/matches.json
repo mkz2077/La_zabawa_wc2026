@@ -58,7 +58,7 @@
 
     { "id": "I1", "group": "I", "home": "FRA", "away": "SEN", "utc": "2026-06-16T19:00:00Z", "venue": "MetLife Stadium",       "city": "New York",      "homeScore": null, "awayScore": null },
     { "id": "I2", "group": "I", "home": "IRQ", "away": "NOR", "utc": "2026-06-16T22:00:00Z", "venue": "Gillette Stadium",      "city": "Boston",        "homeScore": null, "awayScore": null },
-    { "id": "I3", "group": "I", "home": "FRA", "away": "NOR", "utc": "2026-06-22T21:00:00Z", "venue": "Lumen Field",           "city": "Seattle",       "homeScore": null, "awayScore": null },
+    { "id": "I3", "group": "I", "home": "FRA", "away": "IRQ", "utc": "2026-06-22T21:00:00Z", "venue": "Lincoln Financial Field","city": "Philadelphia", "homeScore": null, "awayScore": null },
     { "id": "I4", "group": "I", "home": "NOR", "away": "SEN", "utc": "2026-06-23T00:00:00Z", "venue": "MetLife Stadium",       "city": "New York",      "homeScore": null, "awayScore": null },
     { "id": "I5", "group": "I", "home": "NOR", "away": "FRA", "utc": "2026-06-26T19:00:00Z", "venue": "Gillette Stadium",      "city": "Boston",        "homeScore": null, "awayScore": null },
     { "id": "I6", "group": "I", "home": "SEN", "away": "IRQ", "utc": "2026-06-26T19:00:00Z", "venue": "Hard Rock Stadium",     "city": "Miami",         "homeScore": null, "awayScore": null },
