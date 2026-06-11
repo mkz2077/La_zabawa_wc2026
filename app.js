@@ -537,8 +537,11 @@ function renderHome() {
   updateHomePredCount();
   renderSpecialPicksHome();
 
-  // Upcoming matches (next 5 without results)
-  const upcoming = MATCHES.filter(m => m.homeScore === null).slice(0, 5);
+  // Upcoming matches (next 5 without results, sorted by kickoff time)
+  const upcoming = [...MATCHES]
+    .sort((a, b) => matchUTCDate(a) - matchUTCDate(b))
+    .filter(m => m.homeScore === null)
+    .slice(0, 5);
   const upcomingEl = document.getElementById('homeUpcoming');
   if (!upcoming.length) {
     upcomingEl.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">All group stage matches completed.</div>`;
