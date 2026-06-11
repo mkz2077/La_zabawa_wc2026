@@ -1292,9 +1292,10 @@ function renderAdminUsers() {
             : `<span class="admin-badge gray">Member</span>`;
           let roleActions = '';
           if (canManageRoles && name !== currentUser) {
-            if (role === 'member')      roleActions += `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="setUserRole('${esc(name)}','admin')">Make Admin</button> `;
-            else if (role === 'admin')  roleActions += `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="setUserRole('${esc(name)}','member')">Demote</button> `;
-            if (role !== 'superuser')   roleActions += `<button class="btn btn-gold btn-sm" style="font-size:11px" onclick="designateSuperuser('${esc(name)}')">👑 Make SU</button> `;
+            if (role === 'member')         roleActions += `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="setUserRole('${esc(name)}','admin')">Make Admin</button> `;
+            else if (role === 'admin')     roleActions += `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="setUserRole('${esc(name)}','member')">Demote</button> `;
+            else if (role === 'superuser') roleActions += `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="setUserRole('${esc(name)}','admin')">Demote to Admin</button> `;
+            if (role !== 'superuser')      roleActions += `<button class="btn btn-gold btn-sm" style="font-size:11px" onclick="designateSuperuser('${esc(name)}')">👑 Make SU</button> `;
           }
           return `
             <tr>
