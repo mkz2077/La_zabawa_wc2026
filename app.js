@@ -182,10 +182,7 @@ const VENUE_UTC = {
 };
 
 function matchUTCDate(m) {
-  const off = VENUE_UTC[m.city] ?? -5;
-  const [y, mo, d] = m.date.split('-').map(Number);
-  const [h, min]   = m.time.split(':').map(Number);
-  return new Date(Date.UTC(y, mo - 1, d, h - off, min));
+  return new Date(m.utc);
 }
 
 function warsawKickoff(m) {
@@ -237,7 +234,7 @@ async function loadData() {
     const teamsJson   = await teamsRes.json();
     const matchesJson = await matchesRes.json();
     STATS = await statsRes.json();
-    MATCHES = matchesJson.groupStage; // scores start null; overridden by dbInit → mergeResultsIntoMatches
+    MATCHES = matchesJson.groupStage.map(m => ({ ...m, homeScore: null, awayScore: null }));
     for (const [group, teams] of Object.entries(teamsJson.groups)) {
       teams.forEach(t => { TEAMS[t.id] = { ...t, group }; });
     }
@@ -410,20 +407,37 @@ document.getElementById('loginModal').addEventListener('click', e => {
 // ── COUNTDOWN ─────────────────────────────────────
 function startCountdown() {
   function tick() {
-    const target = new Date('2026-06-11T18:00:00-06:00'); // Mexico City time
-    const now    = new Date();
-    const diff   = target - now;
-    if (diff <= 0) {
-      document.getElementById('cdDays').textContent = '0';
-      document.getElementById('cdHours').textContent = '0';
-      document.getElementById('cdMins').textContent = '0';
-      document.getElementById('cdSecs').textContent = '0';
+    const now = Date.now();
+    const next = MATCHES
+      .filter(m => m.homeScore === null && m.awayScore === null)
+      .map(m => ({ m, t: new Date(m.utc).getTime() }))
+      .filter(x => x.t > now)
+      .sort((a, b) => a.t - b.t)[0];
+
+    const cdEl = document.getElementById('countdown');
+    if (!cdEl) return;
+
+    if (!next) {
+      cdEl.querySelector('.countdown-label').textContent = 'Group stage complete';
+      ['cdDays','cdHours','cdMins','cdSecs'].forEach(id => { document.getElementById(id).textContent = '—'; });
       return;
     }
+
+    const diff = next.t - now;
+    const h = TEAMS[next.m.home] || { name: next.m.home, iso2: null };
+    const a = TEAMS[next.m.away] || { name: next.m.away, iso2: null };
+    const wk = warsawKickoff(next.m);
+
     document.getElementById('cdDays').textContent  = Math.floor(diff / 86400000);
     document.getElementById('cdHours').textContent = Math.floor((diff % 86400000) / 3600000);
     document.getElementById('cdMins').textContent  = Math.floor((diff % 3600000) / 60000);
     document.getElementById('cdSecs').textContent  = Math.floor((diff % 60000) / 1000);
+
+    document.getElementById('countdownLabel').textContent = 'Next match in';
+    document.getElementById('countdownMatchTeams').innerHTML =
+      `${flag(h.iso2, 18)} ${h.name} vs ${a.name} ${flag(a.iso2, 18)}`;
+    document.getElementById('countdownMatchMeta').textContent =
+      `${wk.date} · ${wk.time} Warsaw · Group ${next.m.group}`;
   }
   tick();
   setInterval(tick, 1000);
@@ -868,6 +882,7 @@ function renderLeaderboard() {
     return;
   }
 
+  const allUsers = getUsers();
   el.innerHTML = `
     <table class="leaderboard-table">
       <thead>
@@ -877,15 +892,26 @@ function renderLeaderboard() {
           <th style="text-align:right">Pts</th>
           <th style="text-align:center">Exact</th>
           <th style="text-align:center">Winner</th>
-          <th style="text-align:right">Picks</th>
+          <th style="text-align:center">🏆 Champion</th>
+          <th style="text-align:center">⚽ Top Scorer</th>
         </tr>
       </thead>
       <tbody>
         ${lb.map((u, i) => {
-          const preds  = getUsers()[u.name]?.predictions || {};
-          const picked = Object.keys(preds).length;
+          const ud = allUsers[u.name] || {};
           const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
-          const isMe   = u.name === currentUser;
+          const isMe = u.name === currentUser;
+          const champId = ud.championPick;
+          const champTeam = champId ? (TEAMS[champId] || { name: champId, iso2: null }) : null;
+          const champHit = champId && _champion && champId === _champion;
+          const champCell = champTeam
+            ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;${champHit?'color:var(--green);font-weight:700':''}">${flag(champTeam.iso2,14)} ${esc(champTeam.name)}${champHit?' ✓':''}</span>`
+            : `<span style="color:var(--text3);font-size:11px">—</span>`;
+          const scorerPick = ud.topScorerPick || '';
+          const scorerHit = scorerPick && _topScorer && scorerPick.toLowerCase() === _topScorer.toLowerCase();
+          const scorerCell = scorerPick
+            ? `<span style="font-size:12px;${scorerHit?'color:var(--green);font-weight:700':''}">${esc(scorerPick)}${scorerHit?' ✓':''}</span>`
+            : `<span style="color:var(--text3);font-size:11px">—</span>`;
           return `
             <tr class="${isMe ? 'lb-me' : ''}">
               <td><span class="lb-rank ${rankClass}">${i+1}</span></td>
@@ -898,14 +924,15 @@ function renderLeaderboard() {
               <td class="lb-pts">${u.points}</td>
               <td style="text-align:center"><span class="lb-exact">${u.exact} ✓</span></td>
               <td style="text-align:center"><span class="lb-winner">${u.winner} ≈</span></td>
-              <td style="text-align:right;color:var(--text3);font-size:13px">${picked}</td>
+              <td style="text-align:center">${champCell}</td>
+              <td style="text-align:center">${scorerCell}</td>
             </tr>
           `;
         }).join('')}
       </tbody>
     </table>
     <div style="margin-top:12px;font-size:12px;color:var(--text3)">
-      🟢 Exact score = 3 pts &nbsp;·&nbsp; 🔵 Correct winner/draw = 1 pt &nbsp;·&nbsp; Points recalculate as results come in.
+      🟢 Exact = 3 pts &nbsp;·&nbsp; 🔵 Winner/draw = 1 pt &nbsp;·&nbsp; 🏆 Champion = 4 pts &nbsp;·&nbsp; ⚽ Top scorer = 5 pts
     </div>
   `;
 }

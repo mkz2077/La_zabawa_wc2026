@@ -121,7 +121,7 @@
 
       <div class="countdown card" id="countdown">
         <div>
-          <div class="countdown-label">Tournament starts in</div>
+          <div class="countdown-label" id="countdownLabel">Next match in</div>
           <div class="countdown-units">
             <div class="cd-unit"><div class="cd-val" id="cdDays">--</div><div class="cd-lbl">days</div></div>
             <div class="cd-unit"><div class="cd-val" id="cdHours">--</div><div class="cd-lbl">hrs</div></div>
@@ -130,9 +130,8 @@
           </div>
         </div>
         <div class="countdown-match">
-          <div class="countdown-match-label">Opening match</div>
-          <div class="countdown-match-teams">🇲🇽 Mexico vs South Africa 🇿🇦</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Jun 11 · Estadio Azteca, Mexico City</div>
+          <div id="countdownMatchTeams" class="countdown-match-teams">Loading…</div>
+          <div id="countdownMatchMeta" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
         </div>
       </div>
 
