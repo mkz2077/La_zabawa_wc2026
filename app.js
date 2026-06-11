@@ -193,6 +193,16 @@ function warsawKickoff(m) {
   };
 }
 
+// Returns "YYYY-MM-DD" in Warsaw timezone — used to group matches by day
+function matchWarsawDate(m) {
+  return matchUTCDate(m).toLocaleDateString('en-CA', { timeZone: 'Europe/Warsaw' });
+}
+
+// Returns "Weekday, DD Month YYYY" header label in Warsaw timezone
+function fmtWarsawDateLong(m) {
+  return matchUTCDate(m).toLocaleDateString('en-GB', { timeZone: 'Europe/Warsaw', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 function isMatchLocked(m) {
   if (m.homeScore !== null && m.awayScore !== null) return true;
   const unlocks = JSON.parse(localStorage.getItem(STORAGE.ADMIN_UNLOCKS) || '[]');
@@ -554,16 +564,16 @@ function renderHome() {
 }
 
 function miniMatchCard(m) {
-  const h = TEAMS[m.home] || { iso2: null, name: m.home };
-  const a = TEAMS[m.away] || { iso2: null, name: m.away };
-  const d = fmtDate(m.date);
+  const h  = TEAMS[m.home] || { iso2: null, name: m.home };
+  const a  = TEAMS[m.away] || { iso2: null, name: m.away };
+  const wk = warsawKickoff(m);
   return `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(30,48,88,0.4);font-size:13px">
       <span style="background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px">${m.group}</span>
       <span style="display:flex;align-items:center;gap:5px">${flag(h.iso2, 18)} ${h.name}</span>
       <span style="color:var(--text3);font-size:11px">vs</span>
       <span style="display:flex;align-items:center;gap:5px">${a.name} ${flag(a.iso2, 18)}</span>
-      <span style="margin-left:auto;color:var(--text3);white-space:nowrap">${d}</span>
+      <span style="margin-left:auto;color:var(--text3);white-space:nowrap">${wk.date} ${wk.time}</span>
     </div>
   `;
 }
@@ -588,32 +598,33 @@ function renderSchedule() {
 }
 
 function renderScheduleList(groupFilter) {
-  const list   = document.getElementById('scheduleList');
-  const preds  = currentUser ? getPredictions(currentUser) : {};
-  let matches  = MATCHES;
+  const list  = document.getElementById('scheduleList');
+  const preds = currentUser ? getPredictions(currentUser) : {};
+
+  let matches = [...MATCHES].sort((a, b) => matchUTCDate(a) - matchUTCDate(b));
   if (groupFilter !== 'all') matches = matches.filter(m => m.group === groupFilter);
 
-  // Group by date
+  // Group by Warsaw calendar date
   const byDate = {};
   matches.forEach(m => {
-    if (!byDate[m.date]) byDate[m.date] = [];
-    byDate[m.date].push(m);
+    const d = matchWarsawDate(m);
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(m);
   });
 
-  list.innerHTML = Object.entries(byDate).sort().map(([date, ms]) => `
+  list.innerHTML = Object.entries(byDate).sort().map(([, ms]) => `
     <div class="schedule-day">
-      <div class="schedule-day-header"><span class="day-dot"></span>${fmtDateLong(date)}</div>
+      <div class="schedule-day-header"><span class="day-dot"></span>${fmtWarsawDateLong(ms[0])}</div>
       ${ms.map(m => matchCard(m, preds)).join('')}
     </div>
   `).join('');
 
-  // Attach prediction input listeners
   list.querySelectorAll('.pred-input').forEach(inp => {
     inp.addEventListener('change', () => {
-      const card  = inp.closest('.match-card');
-      const mid   = card.dataset.matchId;
-      const hInp  = card.querySelector('[data-side="home"]');
-      const aInp  = card.querySelector('[data-side="away"]');
+      const card = inp.closest('.match-card');
+      const mid  = card.dataset.matchId;
+      const hInp = card.querySelector('[data-side="home"]');
+      const aInp = card.querySelector('[data-side="away"]');
       savePrediction(mid, hInp.value, aInp.value);
       updatePredBadge(card, mid, hInp.value, aInp.value);
     });
@@ -840,20 +851,23 @@ function renderPicksGrouped(preds) {
   const el = document.getElementById('picksGroupedList');
   if (!el) return;
 
-  const byGroup = {};
-  MATCHES.forEach(m => {
-    if (!byGroup[m.group]) byGroup[m.group] = [];
-    byGroup[m.group].push(m);
+  const sorted = [...MATCHES].sort((a, b) => matchUTCDate(a) - matchUTCDate(b));
+
+  // Group by Warsaw calendar date
+  const byDate = {};
+  sorted.forEach(m => {
+    const d = matchWarsawDate(m);
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(m);
   });
 
-  el.innerHTML = Object.entries(byGroup).sort().map(([grp, ms]) => `
+  el.innerHTML = Object.entries(byDate).sort().map(([, ms]) => `
     <div class="card" style="margin-bottom:12px">
-      <div class="card-title">Group ${grp}</div>
+      <div class="card-title">${fmtWarsawDateLong(ms[0])}</div>
       ${ms.map(m => matchCard(m, preds)).join('')}
     </div>
   `).join('');
 
-  // Re-attach listeners
   el.querySelectorAll('.pred-input').forEach(inp => {
     inp.addEventListener('change', () => {
       const card = inp.closest('.match-card');
