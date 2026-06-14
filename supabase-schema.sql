@@ -44,6 +44,18 @@ CREATE POLICY "allow_all" ON predictions   FOR ALL USING (TRUE) WITH CHECK (TRUE
 CREATE POLICY "allow_all" ON match_results FOR ALL USING (TRUE) WITH CHECK (TRUE);
 CREATE POLICY "allow_all" ON app_settings  FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
--- Enable Realtime for live leaderboard updates
+CREATE TABLE chat (
+  id          BIGSERIAL PRIMARY KEY,
+  username    TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  color       TEXT NOT NULL DEFAULT '#0077c8',
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE chat ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON chat FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+-- Enable Realtime for live leaderboard + chat updates
 ALTER PUBLICATION supabase_realtime ADD TABLE predictions;
 ALTER PUBLICATION supabase_realtime ADD TABLE match_results;
+ALTER PUBLICATION supabase_realtime ADD TABLE chat;

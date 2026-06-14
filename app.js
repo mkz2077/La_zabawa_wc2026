@@ -20,6 +20,10 @@ let _predictions = {};   // { username: { matchId: { home, away } } }
 let _results     = {};   // { matchId: { home, away } }
 let _champion    = null; // teamId or null
 let _topScorer   = null; // player name or null
+let _topScorers  = [];   // [{name, team, count}]
+let _topAssists  = [];   // [{name, team, count}]
+let _chat        = [];   // [{id, username, message, color, created_at}]
+let KNOCKOUT     = [];   // knockout match objects
 
 // LocalStorage: only admin session + unlocks (not shared across users)
 const STORAGE = {
@@ -54,10 +58,13 @@ async function dbInit() {
   _results = {};
   (resultsRes.data || []).forEach(r => { _results[r.match_id] = { home: r.home_score, away: r.away_score }; });
   mergeResultsIntoMatches();
-  _champion = null; _topScorer = null;
+  _champion = null; _topScorer = null; _topScorers = []; _topAssists = []; KNOCKOUT = [];
   (settingsRes.data || []).forEach(s => {
-    if (s.key === 'champion')   _champion  = s.value;
-    if (s.key === 'top_scorer') _topScorer = s.value;
+    if (s.key === 'champion')         _champion  = s.value;
+    if (s.key === 'top_scorer')       _topScorer = s.value;
+    if (s.key === 'top_scorers_list') { try { _topScorers = JSON.parse(s.value); } catch(e) {} }
+    if (s.key === 'top_assists_list') { try { _topAssists = JSON.parse(s.value); } catch(e) {} }
+    if (s.key === 'knockout_matches') { try { KNOCKOUT    = JSON.parse(s.value); } catch(e) {} }
   });
 }
 
@@ -121,6 +128,32 @@ async function dbDeleteSetting(key) {
   if (key === 'top_scorer') _topScorer = null;
 }
 
+async function dbSavePlayerStats(type, data) {
+  const key = type === 'scorers' ? 'top_scorers_list' : 'top_assists_list';
+  await supa.from('app_settings').upsert({ key, value: JSON.stringify(data) }, { onConflict: 'key' });
+  if (type === 'scorers') _topScorers = data;
+  else _topAssists = data;
+  renderStats();
+}
+
+async function dbSaveKnockout(matches) {
+  KNOCKOUT = matches;
+  await supa.from('app_settings').upsert({ key: 'knockout_matches', value: JSON.stringify(matches) }, { onConflict: 'key' });
+  renderBracket();
+}
+
+async function dbLoadChat() {
+  const { data } = await supa.from('chat').select('*').order('created_at', { ascending: true }).limit(150);
+  _chat = data || [];
+  renderChat();
+}
+
+async function dbSendChat(message) {
+  if (!currentUser || !message.trim()) return;
+  const color = _users[currentUser]?.color || '#888';
+  await supa.from('chat').insert({ username: currentUser, message: message.trim(), color });
+}
+
 // ── COMPAT SHIM ───────────────────────────────────
 // getUsers() returns the same structure as before, but computed from Supabase cache
 function getUsers() {
@@ -145,6 +178,15 @@ function updateUserPoints() { /* no-op: computed on the fly in getUsers() */ }
 
 // ── REALTIME ──────────────────────────────────────
 function setupRealtime() {
+  supa.channel('chat-live')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat' }, payload => {
+      if (!_chat.find(c => c.id === payload.new.id)) {
+        _chat.push(payload.new);
+        renderChat();
+      }
+    })
+    .subscribe();
+
   supa.channel('live-updates')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'predictions' }, payload => {
       const p = payload.new || payload.old;
@@ -228,6 +270,7 @@ async function init() {
   renderAdmin();
   startCountdown();
   setupRealtime();
+  dbLoadChat();
 }
 
 function showLoadingOverlay(show) {
@@ -723,7 +766,21 @@ function calcPredPts(ph, pa, rh, ra) {
 }
 
 // ── GROUPS ────────────────────────────────────────
+function setupGroupsTabs() {
+  document.querySelectorAll('#groupsBracketTabs .tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('#groupsBracketTabs .tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      const isStandings = t.dataset.tab === 'standings';
+      document.getElementById('standingsView').style.display = isStandings ? '' : 'none';
+      document.getElementById('bracketView').style.display   = isStandings ? 'none' : '';
+      if (!isStandings) renderBracket();
+    });
+  });
+}
+
 function renderGroups() {
+  setupGroupsTabs();
   const grid = document.getElementById('groupsGrid');
   const standings = calcGroupStandings();
 
@@ -968,16 +1025,12 @@ function renderStats() {
   document.getElementById('statsGoals').textContent  = goals;
   document.getElementById('statsAvg').textContent    = played ? (goals / played).toFixed(2) : '–';
 
-  // Top scorers from stats.json (manually maintained)
   const scorersEl = document.getElementById('topScorers');
   const assistsEl = document.getElementById('topAssists');
-
-  if (STATS.topScorers && STATS.topScorers.length) {
-    scorersEl.innerHTML = statsTable(STATS.topScorers, '⚽', 'Goals');
-  }
-  if (STATS.topAssists && STATS.topAssists.length) {
-    assistsEl.innerHTML = statsTable(STATS.topAssists, '🎯', 'Assists');
-  }
+  const emptyScorer = `<div class="empty-state"><div class="empty-state-icon">⚽</div><h3>No data yet</h3><p>Admin can update scorer stats in the Admin panel.</p></div>`;
+  const emptyAssist = `<div class="empty-state"><div class="empty-state-icon">🎯</div><h3>No data yet</h3><p>Admin can update assist stats in the Admin panel.</p></div>`;
+  scorersEl.innerHTML = _topScorers.length ? statsTable(_topScorers, '⚽', 'Goals')   : emptyScorer;
+  assistsEl.innerHTML = _topAssists.length ? statsTable(_topAssists, '🎯', 'Assists') : emptyAssist;
 }
 
 function statsTable(data, icon, label) {
@@ -1136,6 +1189,7 @@ function renderAdmin() {
     </div>
     <div class="tabs" id="adminTabs">
       <div class="tab active" data-tab="matches">Matches &amp; Results</div>
+      <div class="tab" data-tab="bracket">Knockout Bracket</div>
       ${showAllTabs ? `<div class="tab" data-tab="users">User Management</div><div class="tab" data-tab="settings">Settings</div>` : ''}
     </div>
     <div id="adminTabContent"></div>`;
@@ -1157,6 +1211,7 @@ function submitAdminLogin() {
 function renderAdminTab(tab) {
   if (tab === 'matches') renderAdminMatches();
   else if (tab === 'users') renderAdminUsers();
+  else if (tab === 'bracket') renderBracketAdminTab();
   else renderAdminSettings();
 }
 
@@ -1166,17 +1221,22 @@ function renderAdminMatches() {
   const results = getAdminResults();
   const unlocks = getAdminUnlocks();
   const now     = Date.now();
-  const byGroup = {};
-  MATCHES.forEach(m => { if (!byGroup[m.group]) byGroup[m.group] = []; byGroup[m.group].push(m); });
+  const sorted = [...MATCHES].sort((a, b) => matchUTCDate(a) - matchUTCDate(b));
+  const byDate = {};
+  sorted.forEach(m => {
+    const d = matchWarsawDate(m);
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(m);
+  });
 
   el.innerHTML = `
     <div style="margin-bottom:12px;font-size:13px;color:var(--text2)">
       All times shown in <strong style="color:var(--gold)">Warsaw (CEST, UTC+2)</strong>.
       Predictions auto-lock <strong>2h before kickoff</strong>. Use 🔓/🔒 to override.
     </div>
-    ${Object.entries(byGroup).sort().map(([grp, ms]) => `
+    ${Object.entries(byDate).sort().map(([, ms]) => `
       <div class="card" style="margin-bottom:12px">
-        <div class="card-title">Group ${grp}</div>
+        <div class="card-title">${fmtWarsawDateLong(ms[0])}</div>
         ${ms.map(m => adminMatchRow(m, unlocks, now)).join('')}
       </div>`).join('')}`;
 
@@ -1343,6 +1403,8 @@ function renderAdminSettings() {
         ${curScorer ? `<span style="margin-left:10px;font-size:12px;color:var(--green)">✓ Set: ${esc(curScorer)}</span>` : ''}
       </div>
     </div>
+    </div>
+    ${renderStatsAdminSection()}
     <div class="card" style="max-width:400px;margin-top:16px">
       <div class="card-title">Change Admin Password</div>
       <input class="modal-input" id="newPwd1" type="password" placeholder="New password…" style="margin-bottom:10px">
@@ -1350,6 +1412,261 @@ function renderAdminSettings() {
       <div id="pwdChangeMsg" style="font-size:13px;margin-bottom:10px;display:none"></div>
       <button class="btn btn-primary btn-sm" onclick="changeAdminPwd()">Update Password</button>
     </div>`;
+}
+
+function renderStatsAdminSection() {
+  const teamOpts = Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
+  const teamSelect = `<select class="sp-select" style="flex:1;min-width:120px">
+    <option value="">— team —</option>
+    ${teamOpts.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}
+  </select>`;
+  const mkTable = (list, type) => list.length ? list.map((p,i) => {
+    const t = TEAMS[p.team] || { iso2: null, name: p.team };
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--text3);width:20px;font-size:12px">${i+1}</span>
+      <span style="flex:1;font-weight:600">${esc(p.name)}</span>
+      <span style="font-size:12px;color:var(--text2)">${flag(t.iso2,14)} ${t.name}</span>
+      <span style="color:var(--gold);font-weight:800;width:30px;text-align:right">${p.count}</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red2)" onclick="removePlayerStat('${type}',${i})">✕</button>
+    </div>`;
+  }).join('') : `<div style="color:var(--text3);font-size:13px;padding:8px 0">No entries yet.</div>`;
+
+  return `
+    <div class="grid-2" style="gap:16px;margin-top:16px">
+      <div class="card">
+        <div class="card-title">⚽ Top Scorers (live update)</div>
+        <div id="adminScorersList">${mkTable(_topScorers,'scorers')}</div>
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+          <input class="sp-input" id="statScorerName" placeholder="Player name…" style="flex:1;min-width:120px">
+          <select class="sp-select" id="statScorerTeam" style="min-width:120px">
+            <option value="">— team —</option>
+            ${teamOpts.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}
+          </select>
+          <input class="sp-input" id="statScorerCount" type="number" min="1" max="20" placeholder="#" style="width:52px">
+          <button class="btn btn-gold btn-sm" onclick="addPlayerStat('scorers')">Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🎯 Top Assists (live update)</div>
+        <div id="adminAssistsList">${mkTable(_topAssists,'assists')}</div>
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+          <input class="sp-input" id="statAssistName" placeholder="Player name…" style="flex:1;min-width:120px">
+          <select class="sp-select" id="statAssistTeam" style="min-width:120px">
+            <option value="">— team —</option>
+            ${teamOpts.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}
+          </select>
+          <input class="sp-input" id="statAssistCount" type="number" min="1" max="20" placeholder="#" style="width:52px">
+          <button class="btn btn-gold btn-sm" onclick="addPlayerStat('assists')">Add</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function addPlayerStat(type) {
+  const isScorer = type === 'scorers';
+  const name  = document.getElementById(isScorer ? 'statScorerName'  : 'statAssistName').value.trim();
+  const team  = document.getElementById(isScorer ? 'statScorerTeam'  : 'statAssistTeam').value;
+  const count = parseInt(document.getElementById(isScorer ? 'statScorerCount' : 'statAssistCount').value) || 1;
+  if (!name) return;
+  const list = isScorer ? [..._topScorers] : [..._topAssists];
+  const idx  = list.findIndex(p => p.name.toLowerCase() === name.toLowerCase() && p.team === team);
+  if (idx >= 0) list[idx].count = count;
+  else list.push({ name, team, count });
+  list.sort((a, b) => b.count - a.count);
+  await dbSavePlayerStats(type, list);
+  renderAdminSettings();
+}
+
+async function removePlayerStat(type, index) {
+  const list = (type === 'scorers' ? [..._topScorers] : [..._topAssists]);
+  list.splice(index, 1);
+  await dbSavePlayerStats(type, list);
+  renderAdminSettings();
+}
+
+// ── CHAT ──────────────────────────────────────────
+function renderChat() {
+  const el = document.getElementById('chatMessages');
+  if (!el) return;
+  el.innerHTML = _chat.length ? _chat.map(msg => {
+    const initials = msg.username.slice(0,2).toUpperCase();
+    const time = new Date(msg.created_at).toLocaleTimeString('pl-PL', { hour:'2-digit', minute:'2-digit' });
+    const isMe = msg.username === currentUser;
+    return `
+      <div class="chat-msg${isMe ? ' chat-msg-me' : ''}">
+        <div class="chat-avatar" style="background:${msg.color}">${initials}</div>
+        <div class="chat-bubble">
+          <span class="chat-user">${esc(msg.username)}</span>
+          <span class="chat-text">${esc(msg.message)}</span>
+          <span class="chat-time">${time}</span>
+        </div>
+      </div>`;
+  }).join('') : `<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px 0">No messages yet. Say hello! 👋</div>`;
+  el.scrollTop = el.scrollHeight;
+
+  const row = document.getElementById('chatInputRow');
+  const prompt = document.getElementById('chatLoginPrompt');
+  if (row) row.style.display = currentUser ? 'flex' : 'none';
+  if (prompt) prompt.style.display = currentUser ? 'none' : 'block';
+}
+
+async function sendChat() {
+  const inp = document.getElementById('chatInput');
+  if (!inp || !inp.value.trim()) return;
+  const msg = inp.value.trim();
+  inp.value = '';
+  await dbSendChat(msg);
+}
+
+// ── KNOCKOUT BRACKET ──────────────────────────────
+const KO_ROUND_ORDER  = ['R32','R16','QF','SF','SF3','Final'];
+const KO_ROUND_LABELS = { R32:'Round of 32', R16:'Round of 16', QF:'Quarter-finals', SF:'Semi-finals', SF3:'Third Place', Final:'Final' };
+
+function renderBracket() {
+  const el = document.getElementById('bracketContent');
+  if (!el) return;
+  if (!KNOCKOUT.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏆</div><h3>Bracket coming soon</h3><p>Group stage ends June 27. Admin will set up the knockout bracket once all teams are known.</p></div>`;
+    return;
+  }
+  const preds  = currentUser ? getPredictions(currentUser) : {};
+  const byRound = {};
+  KNOCKOUT.forEach(m => { if (!byRound[m.round]) byRound[m.round] = []; byRound[m.round].push(m); });
+
+  el.innerHTML = KO_ROUND_ORDER.filter(r => byRound[r]).map(r => `
+    <div style="margin-bottom:20px">
+      <div class="schedule-day-header"><span class="day-dot" style="background:var(--gold)"></span>${KO_ROUND_LABELS[r] || r}</div>
+      ${byRound[r].sort((a,b)=>new Date(a.utc)-new Date(b.utc)).map(m => knockoutMatchCard(m, preds)).join('')}
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.pred-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const card = inp.closest('.match-card');
+      const mid  = card.dataset.matchId;
+      savePrediction(mid, card.querySelector('[data-side="home"]').value, card.querySelector('[data-side="away"]').value);
+      updatePredBadge(card, mid, card.querySelector('[data-side="home"]').value, card.querySelector('[data-side="away"]').value);
+    });
+  });
+}
+
+function knockoutMatchCard(m, preds) {
+  if (!m.home || !m.away) {
+    const wk = warsawKickoff(m);
+    return `
+      <div class="match-card" style="opacity:.65">
+        <span class="match-group-badge" style="background:var(--gold2);color:#000;font-size:9px">${KO_ROUND_LABELS[m.round]||m.round}</span>
+        <div class="match-teams">
+          <div class="match-team"><span class="team-name" style="color:var(--text3)">${esc(m.homeLabel||'TBD')}</span></div>
+          <div class="match-score pending">–</div>
+          <div class="match-team away"><span class="team-name" style="color:var(--text3)">${esc(m.awayLabel||'TBD')}</span></div>
+        </div>
+        <div class="match-pred-slot"></div>
+        <div class="match-meta">
+          <div class="match-meta-date">${wk.time} <span style="font-size:10px;opacity:.7">Warsaw</span></div>
+          <div>${wk.date}</div>
+        </div>
+      </div>`;
+  }
+  const savedGroup = m.group;
+  m.group = KO_ROUND_LABELS[m.round] || m.round;
+  const html = matchCard(m, preds);
+  m.group = savedGroup;
+  return html;
+}
+
+function renderBracketAdminTab() {
+  const el = document.getElementById('adminTabContent');
+  if (!el) return;
+  const teams = Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
+  const teamOpts = `<option value="">— TBD —</option>${teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}`;
+
+  el.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:12px">Add Knockout Match</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Round</div>
+          <select class="sp-select" id="koRound">
+            ${KO_ROUND_ORDER.map(r=>`<option value="${r}">${KO_ROUND_LABELS[r]}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">UTC date/time</div>
+          <input class="sp-input" id="koUtc" placeholder="2026-06-29T17:00:00Z" style="width:100%">
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Home label</div>
+          <input class="sp-input" id="koHomeLabel" placeholder="e.g. 1A" style="width:80px">
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Away label</div>
+          <input class="sp-input" id="koAwayLabel" placeholder="e.g. 2B" style="width:80px">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addKnockoutMatch()">Add Match</button>
+      </div>
+    </div>
+    ${KNOCKOUT.length ? KNOCKOUT.map((m,i) => {
+      const wk = warsawKickoff(m);
+      const ht = TEAMS[m.home] || null;
+      const at = TEAMS[m.away] || null;
+      return `
+        <div class="admin-match-row" style="flex-wrap:wrap">
+          <span class="match-group-badge" style="background:var(--gold2);color:#000">${KO_ROUND_LABELS[m.round]||m.round}</span>
+          <div class="admin-match-teams">
+            <span class="admin-team">${m.homeLabel||'?'}</span>
+            <span style="color:var(--text3)">vs</span>
+            <span class="admin-team">${m.awayLabel||'?'}</span>
+          </div>
+          <div class="admin-match-meta">🕐 ${wk.date} ${wk.time}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <select class="sp-select" style="min-width:130px" onchange="setKoTeam(${i},'home',this.value)">
+              ${`<option value="">— TBD —</option>${teams.map(t=>`<option value="${t.id}" ${m.home===t.id?'selected':''}>${t.name}</option>`).join('')}`}
+            </select>
+            <input class="pred-input" type="number" min="0" max="20" placeholder="–" value="${m.homeScore??''}" style="width:44px"
+              onchange="setKoScore(${i},'homeScore',this.value)">
+            <span class="pred-sep">:</span>
+            <input class="pred-input" type="number" min="0" max="20" placeholder="–" value="${m.awayScore??''}" style="width:44px"
+              onchange="setKoScore(${i},'awayScore',this.value)">
+            <select class="sp-select" style="min-width:130px" onchange="setKoTeam(${i},'away',this.value)">
+              ${`<option value="">— TBD —</option>${teams.map(t=>`<option value="${t.id}" ${m.away===t.id?'selected':''}>${t.name}</option>`).join('')}`}
+            </select>
+            <button class="btn btn-ghost btn-sm" style="color:var(--red2)" onclick="removeKnockoutMatch(${i})">✕</button>
+          </div>
+        </div>`;
+    }).join('') : `<div style="color:var(--text3);font-size:13px;padding:12px 0">No knockout matches yet. Add them above.</div>`}`;
+}
+
+async function addKnockoutMatch() {
+  const round     = document.getElementById('koRound').value;
+  const utc       = document.getElementById('koUtc').value.trim();
+  const homeLabel = document.getElementById('koHomeLabel').value.trim();
+  const awayLabel = document.getElementById('koAwayLabel').value.trim();
+  if (!utc) return;
+  const id = `KO_${round}_${Date.now()}`;
+  const matches = [...KNOCKOUT, { id, round, utc, homeLabel, awayLabel, home: null, away: null, homeScore: null, awayScore: null }];
+  await dbSaveKnockout(matches);
+  renderBracketAdminTab();
+}
+
+async function setKoTeam(idx, side, teamId) {
+  const matches = [...KNOCKOUT];
+  matches[idx][side] = teamId || null;
+  await dbSaveKnockout(matches);
+}
+
+async function setKoScore(idx, side, val) {
+  const matches = [...KNOCKOUT];
+  matches[idx][side] = val === '' ? null : parseInt(val);
+  await dbSaveKnockout(matches);
+}
+
+async function removeKnockoutMatch(idx) {
+  if (!confirm('Remove this match?')) return;
+  const matches = [...KNOCKOUT];
+  matches.splice(idx, 1);
+  await dbSaveKnockout(matches);
+  renderBracketAdminTab();
 }
 
 async function setAdminSpecialResult(type) {

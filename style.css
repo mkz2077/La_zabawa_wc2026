@@ -722,6 +722,46 @@ body {
   text-decoration: underline;
 }
 
+/* ── CHAT ── */
+.chat-messages {
+  height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.chat-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.chat-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800;
+  flex-shrink: 0;
+  color: #fff;
+}
+.chat-bubble {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 0 10px 10px 10px;
+  padding: 6px 10px;
+  max-width: calc(100% - 40px);
+  word-break: break-word;
+}
+.chat-msg-me .chat-bubble {
+  background: rgba(0,119,200,0.12);
+  border-color: var(--blue);
+  border-radius: 10px 10px 0 10px;
+}
+.chat-user { font-size: 10px; font-weight: 700; color: var(--text3); display: block; margin-bottom: 2px; }
+.chat-text { font-size: 13px; color: var(--text); display: block; }
+.chat-time { font-size: 10px; color: var(--text3); display: block; margin-top: 2px; text-align: right; }
+#chatInputRow { display: flex; }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 1024px) {
   .groups-grid { grid-template-columns: repeat(2, 1fr); }

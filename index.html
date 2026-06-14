@@ -145,6 +145,20 @@
           <div id="homeLeaderboard">Loading…</div>
         </div>
       </div>
+
+      <!-- CHAT -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">💬 Match Chat</div>
+        <div id="chatMessages" class="chat-messages"></div>
+        <div id="chatInputRow" style="display:none;gap:8px;margin-top:10px">
+          <input id="chatInput" class="sp-input" placeholder="Say something…" maxlength="200" style="flex:1"
+            onkeydown="if(event.key==='Enter')sendChat()">
+          <button class="btn btn-primary btn-sm" onclick="sendChat()">Send</button>
+        </div>
+        <div id="chatLoginPrompt" style="display:none;font-size:13px;color:var(--text3);margin-top:8px">
+          <span onclick="openLoginModal()" style="cursor:pointer;color:var(--blue)">Login</span> to join the chat
+        </div>
+      </div>
     </section>
 
     <!-- SCHEDULE -->
@@ -162,14 +176,23 @@
     <!-- GROUPS -->
     <section class="section" id="section-groups">
       <div class="page-header">
-        <h1>🗂️ Group Standings</h1>
-        <p>Top 2 + 8 best 3rd-place teams advance to Round of 32.</p>
+        <h1>🗂️ Groups &amp; Bracket</h1>
+        <p>Top 2 + 8 best 3rd-place teams advance to the knockout stage.</p>
       </div>
+      <div class="tabs" id="groupsBracketTabs">
+        <div class="tab active" data-tab="standings">Group Standings</div>
+        <div class="tab" data-tab="bracket">🏆 Knockout Bracket</div>
+      </div>
+      <div id="standingsView">
       <div class="groups-grid" id="groupsGrid">Loading…</div>
       <div style="margin-top:16px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;display:flex;gap:20px;flex-wrap:wrap;">
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);margin-right:5px;"></span>Advance (1st)</span>
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--blue);margin-right:5px;"></span>Advance (2nd)</span>
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--gold2);margin-right:5px;"></span>Possible 3rd</span>
+      </div>
+      </div><!-- /standingsView -->
+      <div id="bracketView" style="display:none">
+        <div id="bracketContent">Loading…</div>
       </div>
     </section>
 
