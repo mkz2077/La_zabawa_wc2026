@@ -236,6 +236,7 @@ body {
   padding: 16px 20px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   transition: border-color 0.15s, background 0.15s;
   margin-bottom: 8px;
@@ -836,6 +837,5 @@ body {
   .hero-content { padding-right: 0; }
   .special-picks-grid { grid-template-columns: 1fr; }
   .stat-tiles { grid-template-columns: repeat(2, 1fr); }
-  .match-card { flex-wrap: wrap; }
   .match-meta { min-width: unset; }
 }

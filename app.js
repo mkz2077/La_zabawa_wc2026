@@ -983,8 +983,6 @@ function renderLeaderboard() {
           <th>#</th>
           <th>Player</th>
           <th style="text-align:right">Pts</th>
-          <th style="text-align:center">Exact</th>
-          <th style="text-align:center">Winner</th>
           <th style="text-align:center">🏆 Champion</th>
           <th style="text-align:center">⚽ Top Scorer</th>
         </tr>
@@ -1015,8 +1013,6 @@ function renderLeaderboard() {
                 </div>
               </td>
               <td class="lb-pts">${u.points}</td>
-              <td style="text-align:center"><span class="lb-exact">${u.exact} ✓</span></td>
-              <td style="text-align:center"><span class="lb-winner">${u.winner} ≈</span></td>
               <td style="text-align:center">${champCell}</td>
               <td style="text-align:center">${scorerCell}</td>
             </tr>
