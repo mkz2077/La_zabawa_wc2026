@@ -117,8 +117,6 @@
         <div class="stat-tile"><div class="stat-tile-val" id="homePredCount">0</div><div class="stat-tile-label">Your Picks</div></div>
       </div>
 
-      <div id="specialPicksHome"></div>
-
       <div class="countdown card" id="countdown">
         <div>
           <div class="countdown-label" id="countdownLabel">Next match in</div>
@@ -135,19 +133,8 @@
         </div>
       </div>
 
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-title">Upcoming Matches</div>
-          <div id="homeUpcoming">Loading…</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Top of Leaderboard</div>
-          <div id="homeLeaderboard">Loading…</div>
-        </div>
-      </div>
-
       <!-- CHAT -->
-      <div class="card" style="margin-top:16px">
+      <div class="card" style="margin-bottom:16px">
         <div class="card-title">💬 Match Chat</div>
         <div id="chatMessages" class="chat-messages"></div>
         <div id="chatInputRow" style="display:none;gap:8px;margin-top:10px">
@@ -157,6 +144,17 @@
         </div>
         <div id="chatLoginPrompt" style="display:none;font-size:13px;color:var(--text3);margin-top:8px">
           <span onclick="openLoginModal()" style="cursor:pointer;color:var(--blue)">Login</span> to join the chat
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Upcoming Matches</div>
+          <div id="homeUpcoming">Loading…</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Top of Leaderboard</div>
+          <div id="homeLeaderboard">Loading…</div>
         </div>
       </div>
     </section>
@@ -202,6 +200,7 @@
         <h1>🎯 My Picks</h1>
         <p>Predict every match. 3 pts for exact score, 1 pt for correct winner/draw.</p>
       </div>
+      <div id="bonusPicks"></div>
       <div id="picksContent">
         <div class="picks-login-prompt">
           <div class="big-icon">🔐</div>
@@ -229,28 +228,11 @@
         <h1>📊 Statistics</h1>
         <p>Live tournament statistics updated after each match.</p>
       </div>
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-title">Top Scorers</div>
-          <div id="topScorers">
-            <div class="empty-state">
-              <div class="empty-state-icon">⚽</div>
-              <h3>Tournament not started</h3>
-              <p>Scorer stats will appear here once matches begin on June 11.</p>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title">Top Assists</div>
-          <div id="topAssists">
-            <div class="empty-state">
-              <div class="empty-state-icon">🎯</div>
-              <h3>Tournament not started</h3>
-              <p>Assist stats will appear here once matches begin on June 11.</p>
-            </div>
-          </div>
-        </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">⚽ Top Scorers</div>
+        <div id="topScorers"></div>
       </div>
+      <div id="userStatsSection"></div>
       <div class="card" style="margin-top:16px">
         <div class="card-title">Results Summary</div>
         <div id="resultsSummary" style="color:var(--text2);font-size:14px;padding:8px 0">

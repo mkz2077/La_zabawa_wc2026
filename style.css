@@ -722,6 +722,54 @@ body {
   text-decoration: underline;
 }
 
+/* ── USER STATS ── */
+.user-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.us-item {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  text-align: center;
+}
+.us-val {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.us-den { font-size: 13px; color: var(--text3); font-weight: 400; }
+.us-lbl { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; }
+
+/* ── MATCH PREDICTORS ── */
+.match-predictors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+}
+.pred-avatar {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 800; color: #fff;
+  cursor: default;
+  flex-shrink: 0;
+}
+.pred-label {
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: 2px;
+}
+
 /* ── CHAT ── */
 .chat-messages {
   height: 260px;
@@ -782,6 +830,7 @@ body {
   .main-content { margin-left: 60px; padding: 16px; }
   .groups-grid { grid-template-columns: 1fr; }
   .hero h1 { font-size: 26px; }
+  .user-stats-grid { grid-template-columns: repeat(2, 1fr); }
   .hero-ball-wrap { display: none; }
   .hero-field-lines { display: none; }
   .hero-content { padding-right: 0; }

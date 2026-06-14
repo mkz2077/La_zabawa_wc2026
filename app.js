@@ -509,7 +509,7 @@ async function saveSpecialPick(type, value) {
 }
 
 function renderSpecialPicksHome() {
-  const el = document.getElementById('specialPicksHome');
+  const el = document.getElementById('bonusPicks');
   if (!el) return;
   const locked = isSpecialPickLocked();
   const champion  = _champion;
@@ -578,7 +578,6 @@ function renderSpecialPicksHome() {
 // ── HOME ──────────────────────────────────────────
 function renderHome() {
   updateHomePredCount();
-  renderSpecialPicksHome();
 
   // Upcoming matches (next 5 without results, sorted by kickoff time)
   const upcoming = [...MATCHES]
@@ -661,7 +660,7 @@ function renderScheduleList(groupFilter) {
   list.innerHTML = Object.entries(byDate).sort().map(([, ms]) => `
     <div class="schedule-day">
       <div class="schedule-day-header"><span class="day-dot"></span>${fmtWarsawDateLong(ms[0])}</div>
-      ${ms.map(m => matchCard(m, preds)).join('')}
+      ${ms.map(m => matchCard(m, preds, true)).join('')}
     </div>
   `).join('');
 
@@ -677,7 +676,7 @@ function renderScheduleList(groupFilter) {
   });
 }
 
-function matchCard(m, preds) {
+function matchCard(m, preds, showPredictors = false) {
   const h   = TEAMS[m.home] || { iso2: null, name: m.home };
   const a   = TEAMS[m.away] || { iso2: null, name: m.away };
   const p          = preds[m.id];
@@ -740,6 +739,7 @@ function matchCard(m, preds) {
         <div>${wk.date} · ${m.city}</div>
         <div style="font-size:10px;opacity:.6">${m.venue}</div>
       </div>
+      ${showPredictors ? matchPredictorsHtml(m) : ''}
     </div>
   `;
 }
@@ -855,6 +855,7 @@ function calcGroupStandings() {
 
 // ── MY PICKS ──────────────────────────────────────
 function renderPicks() {
+  renderSpecialPicksHome(); // bonus picks always shown at top of picks page
   const el = document.getElementById('picksContent');
   if (!currentUser) {
     el.innerHTML = `
@@ -884,22 +885,40 @@ function renderPicks() {
   const users = getUsers();
   const u = users[currentUser];
 
+  const predsOnPlayed = MATCHES.filter(m => m.homeScore !== null && preds[m.id]).length;
+  const accuracy    = predsOnPlayed ? Math.round((exact + winner) / predsOnPlayed * 100) : null;
+  const exactRate   = predsOnPlayed ? Math.round(exact / predsOnPlayed * 100) : null;
+  const bonusPts    = ((_champion && u.championPick === _champion) ? 4 : 0) +
+                      ((_topScorer && u.topScorerPick && u.topScorerPick.toLowerCase() === _topScorer.toLowerCase()) ? 5 : 0);
+
+  // best group
+  const grpPts = {};
+  MATCHES.forEach(m => {
+    if (m.homeScore === null) return;
+    const p = preds[m.id]; if (!p) return;
+    if (!grpPts[m.group]) grpPts[m.group] = { pts:0, n:0 };
+    grpPts[m.group].pts += calcPredPts(p.home, p.away, m.homeScore, m.awayScore);
+    grpPts[m.group].n++;
+  });
+  const bestGrp = Object.entries(grpPts).sort((a,b) => b[1].pts - a[1].pts)[0];
+
   el.innerHTML = `
-    <div class="grid-4" style="margin-bottom:20px">
-      <div class="stat-tile"><div class="stat-tile-val">${made}</div><div class="stat-tile-label">Picks made</div></div>
-      <div class="stat-tile"><div class="stat-tile-val">${total - made}</div><div class="stat-tile-label">Remaining</div></div>
-      <div class="stat-tile"><div class="stat-tile-val" style="color:var(--green)">${earnedPts}</div><div class="stat-tile-label">Points earned</div></div>
-      <div class="stat-tile"><div class="stat-tile-val">${exact}</div><div class="stat-tile-label">Exact scores</div></div>
-    </div>
-    <div class="card" style="margin-bottom:16px">
-      <div style="font-size:14px;color:var(--text2)">
-        <strong style="color:var(--text)">${esc(currentUser)}</strong>'s picks &nbsp;·&nbsp;
-        ${made} / ${total} matches predicted &nbsp;·&nbsp;
-        ${played} played so far
+    <div class="card user-stats-card" style="margin-bottom:16px">
+      <div class="card-title">📊 Your Stats</div>
+      <div class="user-stats-grid">
+        <div class="us-item"><div class="us-val">${made}<span class="us-den">/${total}</span></div><div class="us-lbl">Picks filled</div></div>
+        <div class="us-item"><div class="us-val">${earnedPts + bonusPts}</div><div class="us-lbl">Total pts</div></div>
+        <div class="us-item"><div class="us-val" style="color:var(--green)">${accuracy !== null ? accuracy+'%' : '–'}</div><div class="us-lbl">Accuracy</div></div>
+        <div class="us-item"><div class="us-val" style="color:var(--gold)">${exactRate !== null ? exactRate+'%' : '–'}</div><div class="us-lbl">Exact rate</div></div>
+        <div class="us-item"><div class="us-val">${exact}</div><div class="us-lbl">Exact scores ⭐</div></div>
+        <div class="us-item"><div class="us-val">${winner}</div><div class="us-lbl">Correct result ✓</div></div>
+        <div class="us-item"><div class="us-val" style="color:var(--gold)">${bonusPts > 0 ? '+'+bonusPts : '–'}</div><div class="us-lbl">Bonus pts 🏆</div></div>
+        <div class="us-item"><div class="us-val">${bestGrp ? `<span style="font-size:13px">Grp ${bestGrp[0]}</span>` : '–'}</div><div class="us-lbl">Best group${bestGrp ? ' ('+bestGrp[1].pts+' pts)' : ''}</div></div>
       </div>
-      <div style="margin-top:8px;background:var(--bg3);border-radius:6px;height:6px;overflow:hidden">
+      <div style="margin-top:10px;background:var(--bg3);border-radius:6px;height:6px;overflow:hidden">
         <div style="background:var(--red);height:100%;width:${Math.round(made/total*100)}%;transition:width 0.5s"></div>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:5px">${made} / ${total} matches predicted · ${played} played so far</div>
     </div>
     <div id="picksGroupedList">Loading…</div>
   `;
@@ -1026,11 +1045,73 @@ function renderStats() {
   document.getElementById('statsAvg').textContent    = played ? (goals / played).toFixed(2) : '–';
 
   const scorersEl = document.getElementById('topScorers');
-  const assistsEl = document.getElementById('topAssists');
-  const emptyScorer = `<div class="empty-state"><div class="empty-state-icon">⚽</div><h3>No data yet</h3><p>Admin can update scorer stats in the Admin panel.</p></div>`;
-  const emptyAssist = `<div class="empty-state"><div class="empty-state-icon">🎯</div><h3>No data yet</h3><p>Admin can update assist stats in the Admin panel.</p></div>`;
-  scorersEl.innerHTML = _topScorers.length ? statsTable(_topScorers, '⚽', 'Goals')   : emptyScorer;
-  assistsEl.innerHTML = _topAssists.length ? statsTable(_topAssists, '🎯', 'Assists') : emptyAssist;
+  scorersEl.innerHTML = _topScorers.length
+    ? statsTable(_topScorers, '⚽', 'Goals')
+    : `<div class="empty-state"><div class="empty-state-icon">⚽</div><h3>No data yet</h3><p>Admin updates this via the Admin panel.</p></div>`;
+
+  const userStatsEl = document.getElementById('userStatsSection');
+  if (userStatsEl) renderAllUsersStats(userStatsEl);
+}
+
+function renderAllUsersStats(el) {
+  const lb = calcLeaderboard();
+  if (!lb.length) { el.innerHTML = ''; return; }
+  const rows = lb.map((u, i) => {
+    const preds    = _predictions[u.name] || {};
+    const played   = MATCHES.filter(m => m.homeScore !== null);
+    let exact = 0, winner = 0, total = 0;
+    played.forEach(m => {
+      const p = preds[m.id]; if (!p) return;
+      total++;
+      const pts = calcPredPts(p.home, p.away, m.homeScore, m.awayScore);
+      if (pts === 3) exact++;
+      else if (pts === 1) winner++;
+    });
+    const acc   = total ? Math.round((exact+winner)/total*100) : null;
+    const ud    = _users[u.name] || {};
+    const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
+    return `<tr>
+      <td><span class="lb-rank ${rankClass}">${i+1}</span></td>
+      <td><div class="lb-user">
+        <div class="user-avatar" style="background:${u.color};width:28px;height:28px;font-size:11px">${u.name.slice(0,2).toUpperCase()}</div>
+        <strong>${esc(u.name)}</strong>
+      </div></td>
+      <td class="lb-pts">${u.points}</td>
+      <td style="text-align:center;color:var(--green)">${exact}</td>
+      <td style="text-align:center;color:var(--gold2)">${winner}</td>
+      <td style="text-align:center">${acc !== null ? acc+'%' : '–'}</td>
+      <td style="text-align:center;color:var(--text3);font-size:12px">${Object.keys(preds).length}</td>
+    </tr>`;
+  });
+  el.innerHTML = `
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">🏅 Predictor Rankings</div>
+      <table class="leaderboard-table">
+        <thead><tr><th>#</th><th>Player</th><th style="text-align:right">Pts</th><th style="text-align:center">⭐ Exact</th><th style="text-align:center">✓ Correct</th><th style="text-align:center">Accuracy</th><th style="text-align:center">Picks</th></tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── WHO PREDICTED CORRECTLY ────────────────────────
+function matchPredictorsHtml(m) {
+  if (m.homeScore === null || m.awayScore === null) return '';
+  const exact = [], correct = [];
+  for (const [username, upreds] of Object.entries(_predictions)) {
+    const p = upreds[m.id]; if (!p) continue;
+    const u = _users[username];
+    const obj = { username, color: u?.color || '#555' };
+    if (p.home === m.homeScore && p.away === m.awayScore) exact.push(obj);
+    else if (Math.sign(p.home - p.away) === Math.sign(m.homeScore - m.awayScore)) correct.push(obj);
+  }
+  if (!exact.length && !correct.length) return '';
+  const avatars = (list, style) => list.map(u =>
+    `<div title="${esc(u.username)}: ${(_predictions[u.username]||{})[m.id]?.home ?? '?'}:${(_predictions[u.username]||{})[m.id]?.away ?? '?'}" class="pred-avatar" style="background:${u.color};${style}">${u.username.slice(0,2).toUpperCase()}</div>`
+  ).join('');
+  return `<div class="match-predictors">
+    ${exact.length  ? `<span class="pred-label" style="color:var(--green)">⭐</span>${avatars(exact,  'border:1.5px solid var(--green)')}`  : ''}
+    ${correct.length? `<span class="pred-label" style="color:var(--gold2)">✓</span>${avatars(correct, 'border:1.5px solid var(--gold2)')}`  : ''}
+  </div>`;
 }
 
 function statsTable(data, icon, label) {
@@ -1432,32 +1513,17 @@ function renderStatsAdminSection() {
   }).join('') : `<div style="color:var(--text3);font-size:13px;padding:8px 0">No entries yet.</div>`;
 
   return `
-    <div class="grid-2" style="gap:16px;margin-top:16px">
-      <div class="card">
-        <div class="card-title">⚽ Top Scorers (live update)</div>
-        <div id="adminScorersList">${mkTable(_topScorers,'scorers')}</div>
-        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-          <input class="sp-input" id="statScorerName" placeholder="Player name…" style="flex:1;min-width:120px">
-          <select class="sp-select" id="statScorerTeam" style="min-width:120px">
-            <option value="">— team —</option>
-            ${teamOpts.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}
-          </select>
-          <input class="sp-input" id="statScorerCount" type="number" min="1" max="20" placeholder="#" style="width:52px">
-          <button class="btn btn-gold btn-sm" onclick="addPlayerStat('scorers')">Add</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">🎯 Top Assists (live update)</div>
-        <div id="adminAssistsList">${mkTable(_topAssists,'assists')}</div>
-        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-          <input class="sp-input" id="statAssistName" placeholder="Player name…" style="flex:1;min-width:120px">
-          <select class="sp-select" id="statAssistTeam" style="min-width:120px">
-            <option value="">— team —</option>
-            ${teamOpts.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}
-          </select>
-          <input class="sp-input" id="statAssistCount" type="number" min="1" max="20" placeholder="#" style="width:52px">
-          <button class="btn btn-gold btn-sm" onclick="addPlayerStat('assists')">Add</button>
-        </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">⚽ Top Scorers (live update)</div>
+      <div id="adminScorersList">${mkTable(_topScorers,'scorers')}</div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <input class="sp-input" id="statScorerName" placeholder="Player name…" style="flex:1;min-width:120px">
+        <select class="sp-select" id="statScorerTeam" style="min-width:120px">
+          <option value="">— team —</option>
+          ${teamOpts.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}
+        </select>
+        <input class="sp-input" id="statScorerCount" type="number" min="1" max="20" placeholder="#" style="width:52px">
+        <button class="btn btn-gold btn-sm" onclick="addPlayerStat('scorers')">Add</button>
       </div>
     </div>`;
 }
