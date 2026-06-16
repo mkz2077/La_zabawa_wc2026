@@ -1528,7 +1528,67 @@ function renderAdminUsers() {
             </tr>`;
         }).join('')}
       </tbody>
-    </table>`;
+    </table>
+    ${renderUserBonusPickEdit()}`;
+}
+
+function renderUserBonusPickEdit() {
+  const users    = Object.keys(_users).sort((a,b) => a.localeCompare(b));
+  const teamOpts = Object.values(TEAMS).sort((a,b) => a.name.localeCompare(b.name));
+  return `
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">✏️ Fix User Bonus Picks</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Override a user's champion or top scorer pick — use when they missed the deadline or misspelled a name.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">User</div>
+          <select class="sp-select" id="editPickUser" style="min-width:140px" onchange="loadUserPicksForEdit()">
+            <option value="">— select user —</option>
+            ${users.map(n => `<option value="${n}">${esc(n)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">🏆 Champion Pick</div>
+          <select class="sp-select" id="editPickChamp" style="width:100%">
+            <option value="">— not set —</option>
+            ${teamOpts.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">⚽ Top Scorer Pick</div>
+          <input class="sp-input" id="editPickScorer" placeholder="Player name…" style="width:100%">
+        </div>
+        <button class="btn btn-gold btn-sm" onclick="saveUserPickEdit()" style="height:38px">Save Picks</button>
+      </div>
+      <div id="editPickMsg" style="font-size:12px;margin-top:8px;display:none"></div>
+    </div>`;
+}
+
+function loadUserPicksForEdit() {
+  const name = document.getElementById('editPickUser')?.value;
+  if (!name || !_users[name]) return;
+  const u = _users[name];
+  const champEl  = document.getElementById('editPickChamp');
+  const scorerEl = document.getElementById('editPickScorer');
+  if (champEl)  champEl.value  = u.championPick  || '';
+  if (scorerEl) scorerEl.value = u.topScorerPick || '';
+  const msg = document.getElementById('editPickMsg');
+  if (msg) msg.style.display = 'none';
+}
+
+async function saveUserPickEdit() {
+  const name   = document.getElementById('editPickUser')?.value;
+  const champ  = document.getElementById('editPickChamp')?.value  || null;
+  const scorer = (document.getElementById('editPickScorer')?.value || '').trim() || null;
+  const msg    = document.getElementById('editPickMsg');
+  if (!name) {
+    if (msg) { msg.style.cssText = 'display:block;color:var(--red2)'; msg.textContent = 'Select a user first.'; }
+    return;
+  }
+  await dbUpdateUserField(name, 'championPick',  champ);
+  await dbUpdateUserField(name, 'topScorerPick', scorer);
+  renderLeaderboard();
+  if (msg) { msg.style.cssText = 'display:block;color:var(--green)'; msg.textContent = `✓ Picks updated for ${name}.`; }
 }
 
 function renderAdminSettings() {
