@@ -578,6 +578,9 @@ function renderSpecialPicksHome() {
 // ── HOME ──────────────────────────────────────────
 function renderHome() {
   updateHomePredCount();
+  const played = MATCHES.filter(m => m.homeScore !== null).length;
+  const el = document.getElementById('homeMatchesPlayed');
+  if (el) el.textContent = played;
 
   // Upcoming matches (next 5 without results, sorted by kickoff time)
   const upcoming = [...MATCHES]
@@ -614,6 +617,7 @@ function miniMatchCard(m) {
   const wk = warsawKickoff(m);
   return `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(30,48,88,0.4);font-size:13px">
+      ${matchStatusLamp(m)}
       <span style="background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px">${m.group}</span>
       <span style="display:flex;align-items:center;gap:5px">${flag(h.iso2, 18)} ${h.name}</span>
       <span style="color:var(--text3);font-size:11px">vs</span>
@@ -721,6 +725,7 @@ function matchCard(m, preds, showPredictors = false) {
   const wk = warsawKickoff(m);
   return `
     <div class="match-card ${hasResult ? 'has-result' : matchLocked ? 'locked' : ''}" data-match-id="${m.id}">
+      ${matchStatusLamp(m)}
       <span class="match-group-badge">${m.group}</span>
       <div class="match-teams">
         <div class="match-team">
@@ -975,12 +980,14 @@ function renderLeaderboard() {
     return;
   }
 
-  const allUsers = getUsers();
+  const allUsers  = getUsers();
+  const prevSnap  = getRankSnapshot();
+  const MEDALS    = ['🥇','🥈','🥉'];
   el.innerHTML = `
     <table class="leaderboard-table">
       <thead>
         <tr>
-          <th>#</th>
+          <th style="width:60px">#</th>
           <th>Player</th>
           <th style="text-align:right">Pts</th>
           <th style="text-align:center">🏆 Champion</th>
@@ -989,23 +996,34 @@ function renderLeaderboard() {
       </thead>
       <tbody>
         ${lb.map((u, i) => {
-          const ud = allUsers[u.name] || {};
-          const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
-          const isMe = u.name === currentUser;
-          const champId = ud.championPick;
+          const ud       = allUsers[u.name] || {};
+          const isMe     = u.name === currentUser;
+          const isTop3   = i < 3;
+          const medal    = MEDALS[i] || '';
+          const prevRank = prevSnap[u.name];
+          const diff     = prevRank ? prevRank - (i + 1) : 0;
+          const arrow    = diff > 0  ? `<span class="rank-up">▲${diff}</span>`
+                         : diff < 0  ? `<span class="rank-dn">▼${Math.abs(diff)}</span>`
+                         : prevRank  ? `<span class="rank-eq">—</span>` : '';
+          const champId  = ud.championPick;
           const champTeam = champId ? (TEAMS[champId] || { name: champId, iso2: null }) : null;
-          const champHit = champId && _champion && champId === _champion;
+          const champHit  = champId && _champion && champId === _champion;
           const champCell = champTeam
             ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;${champHit?'color:var(--green);font-weight:700':''}">${flag(champTeam.iso2,14)} ${esc(champTeam.name)}${champHit?' ✓':''}</span>`
             : `<span style="color:var(--text3);font-size:11px">—</span>`;
           const scorerPick = ud.topScorerPick || '';
-          const scorerHit = scorerPick && _topScorer && scorerPick.toLowerCase() === _topScorer.toLowerCase();
+          const scorerHit  = scorerPick && _topScorer && scorerPick.toLowerCase() === _topScorer.toLowerCase();
           const scorerCell = scorerPick
             ? `<span style="font-size:12px;${scorerHit?'color:var(--green);font-weight:700':''}">${esc(scorerPick)}${scorerHit?' ✓':''}</span>`
             : `<span style="color:var(--text3);font-size:11px">—</span>`;
           return `
-            <tr class="${isMe ? 'lb-me' : ''}">
-              <td><span class="lb-rank ${rankClass}">${i+1}</span></td>
+            <tr class="${isMe ? 'lb-me' : ''}${isTop3 ? ' lb-top3' : ''}">
+              <td>
+                <div style="display:flex;align-items:center;gap:5px">
+                  <span class="lb-rank lb-medal${i}">${medal || (i+1)}</span>
+                  ${arrow}
+                </div>
+              </td>
               <td>
                 <div class="lb-user">
                   <div class="user-avatar" style="background:${u.color};width:32px;height:32px;font-size:12px">${u.name.slice(0,2).toUpperCase()}</div>
@@ -1207,6 +1225,7 @@ function getAdminResults() { return _results; }
 function getAdminUnlocks() { return JSON.parse(localStorage.getItem(STORAGE.ADMIN_UNLOCKS) || '[]'); }
 
 async function saveAdminResult(matchId, home, away) {
+  snapshotRankings();
   const h = home === '' ? null : parseInt(home);
   const a = away === '' ? null : parseInt(away);
   if (h === null) { delete _results[matchId]; } else { _results[matchId] = { home: h, away: a }; }
@@ -1260,9 +1279,31 @@ function renderAdmin() {
   const statusHtml = isAdminLoggedIn()
     ? `<div style="font-size:14px;color:var(--green)">✅ Logged in as Admin</div><button class="btn btn-ghost btn-sm" onclick="logoutAdmin()">Logout</button>`
     : `<div style="font-size:14px;color:var(--gold)">${role === 'superuser' ? '👑 Superuser' : '🔧 Admin'}: <strong>${esc(currentUser)}</strong></div>`;
+  const teamOpts2 = Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
   el.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       ${statusHtml}
+    </div>
+    <div class="card" style="margin-bottom:16px;padding:12px 16px">
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">🏆 Tournament Champion</div>
+          <select class="sp-select" id="qChampSelect" style="width:100%">
+            <option value="">— not set —</option>
+            ${teamOpts2.map(t=>`<option value="${t.id}" ${_champion===t.id?'selected':''}>${t.name}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">⚽ Top Scorer</div>
+          <input class="sp-input" id="qScorerInput" placeholder="Player name…" value="${esc(_topScorer||'')}" style="width:100%">
+        </div>
+        <button class="btn btn-gold btn-sm" style="height:38px;white-space:nowrap" onclick="saveQuickResults()">Save Results</button>
+      </div>
+      ${(_champion||_topScorer) ? `<div style="margin-top:8px;font-size:11px;color:var(--text3)">
+        ${_champion ? `Champion: <strong style="color:var(--gold)">${esc((TEAMS[_champion]||{name:_champion}).name)}</strong>` : ''}
+        ${_champion && _topScorer ? ' · ' : ''}
+        ${_topScorer ? `Top scorer: <strong style="color:var(--gold)">${esc(_topScorer)}</strong>` : ''}
+      </div>` : ''}
     </div>
     <div class="tabs" id="adminTabs">
       <div class="tab active" data-tab="matches">Matches &amp; Results</div>
@@ -1283,6 +1324,42 @@ function renderAdmin() {
 function submitAdminLogin() {
   const ok = loginAdmin(document.getElementById('adminPwdInput')?.value || '');
   if (!ok) { const e = document.getElementById('adminLoginError'); if (e) e.style.display = 'block'; }
+}
+
+// ── RANK SNAPSHOT (for position change arrows) ─────
+function snapshotRankings() {
+  const snap = {};
+  calcLeaderboard().forEach((u, i) => { snap[u.name] = i + 1; });
+  localStorage.setItem('wc2026_rank_snap', JSON.stringify(snap));
+}
+function getRankSnapshot() {
+  return JSON.parse(localStorage.getItem('wc2026_rank_snap') || '{}');
+}
+
+// ── MATCH STATUS LAMP ─────────────────────────────
+function matchStatusLamp(m, title = true) {
+  const now     = Date.now();
+  const kickoff = new Date(m.utc).getTime();
+  const done    = m.homeScore !== null && m.awayScore !== null;
+  if (done)                                         return `<span class="slamp slamp-done"  ${title?'title="Finished"'   :''}>●</span>`;
+  if (now < kickoff)                                return `<span class="slamp slamp-soon"  ${title?'title="Not started"':''}>●</span>`;
+  if (now < kickoff + 2.5 * 3600_000)              return `<span class="slamp slamp-live"  ${title?'title="Possibly live"':''}>●</span>`;
+  return                                                   `<span class="slamp slamp-wait"  ${title?'title="Awaiting result"':''}>●</span>`;
+}
+
+// ── QUICK RESULTS (admin panel top bar) ───────────
+async function saveQuickResults() {
+  const champVal  = document.getElementById('qChampSelect')?.value;
+  const scorerVal = document.getElementById('qScorerInput')?.value.trim();
+  if (champVal !== undefined) {
+    if (champVal) await dbSetSetting('champion', champVal);
+    else await dbDeleteSetting('champion');
+  }
+  if (scorerVal !== undefined) {
+    if (scorerVal) await dbSetSetting('top_scorer', scorerVal);
+    else await dbDeleteSetting('top_scorer');
+  }
+  renderLeaderboard(); renderHome(); renderAdmin();
 }
 
 function renderAdminTab(tab) {

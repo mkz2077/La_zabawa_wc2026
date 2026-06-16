@@ -723,6 +723,26 @@ body {
   text-decoration: underline;
 }
 
+/* ── STAT TILE TOTAL ── */
+.stat-tile-total { font-size: 14px; color: var(--text3); font-weight: 400; }
+
+/* ── STATUS LAMP ── */
+.slamp { font-size: 11px; flex-shrink: 0; line-height: 1; }
+.slamp-soon { color: var(--text3); }
+.slamp-live { color: #ff9500; animation: lampPulse 1.4s ease-in-out infinite; }
+.slamp-done { color: var(--green); }
+.slamp-wait { color: var(--gold2); }
+@keyframes lampPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ── LEADERBOARD MEDALS & ARROWS ── */
+.lb-medal0 { color: #ffd700; font-size: 20px; }
+.lb-medal1 { color: #c0c0c0; font-size: 20px; }
+.lb-medal2 { color: #cd7f32; font-size: 20px; }
+.lb-top3 td { background: rgba(255,215,0,0.03) !important; }
+.rank-up { font-size: 10px; font-weight: 800; color: var(--green); white-space: nowrap; }
+.rank-dn { font-size: 10px; font-weight: 800; color: var(--red2);  white-space: nowrap; }
+.rank-eq { font-size: 10px; color: var(--text3); }
+
 /* ── USER STATS ── */
 .user-stats-grid {
   display: grid;
@@ -815,6 +835,19 @@ body {
 @media (max-width: 1024px) {
   .groups-grid { grid-template-columns: repeat(2, 1fr); }
   .stat-tiles { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Mobile match card fix (≤520px) */
+@media (max-width: 520px) {
+  .match-card { padding: 10px 12px; gap: 6px; }
+  .match-group-badge { font-size: 9px; padding: 2px 5px; }
+  .match-teams { gap: 4px; }
+  .match-team { gap: 4px; font-size: 13px; }
+  .team-name { font-size: 12px; }
+  .match-score { font-size: 18px; min-width: 44px; padding: 3px 6px; }
+  .match-pred-slot { min-width: unset; width: 100%; justify-content: flex-start; }
+  .match-meta { min-width: unset; font-size: 10px; }
+  .flag-img { width: 20px !important; height: 14px !important; }
 }
 
 @media (max-width: 768px) {
