@@ -63,7 +63,7 @@ async function dbInit() {
     fetchAllRows('match_results'),
     fetchAllRows('app_settings'),
   ]);
-  console.log('[DB] users:', usersData.length, '| predictions:', predsData.length, '| results:', resultsData.length);
+  console.log(`[DB] loaded — users:${usersData.length} predictions:${predsData.length} results:${resultsData.length}`);
   _users = {};
   usersData.forEach(u => {
     _users[u.username] = {
