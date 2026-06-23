@@ -48,6 +48,11 @@ async function dbInit() {
     supa.from('match_results').select('*'),
     supa.from('app_settings').select('*'),
   ]);
+  // Diagnostic logging — visible in browser DevTools Console
+  console.log('[DB] users:', usersRes.data?.length ?? 'null', usersRes.error?.message || '');
+  console.log('[DB] predictions:', predsRes.data?.length ?? 'null', predsRes.error?.message || '');
+  console.log('[DB] results:', resultsRes.data?.length ?? 'null', resultsRes.error?.message || '');
+  if (predsRes.error) showToast('⚠️ Could not load picks from database: ' + predsRes.error.message, 'error');
   _users = {};
   (usersRes.data || []).forEach(u => {
     _users[u.username] = {
@@ -85,12 +90,14 @@ function mergeResultsIntoMatches() {
 async function dbSavePrediction(username, matchId, home, away) {
   if (home === null) {
     const { error } = await supa.from('predictions').delete().eq('username', username).eq('match_id', matchId);
+    console.log('[DB] delete pick', matchId, error?.message || 'OK');
     return error ? { ok: false, error } : { ok: true };
   } else {
-    const { error } = await supa.from('predictions').upsert(
-      { username, match_id: matchId, home_score: home, away_score: away, updated_at: new Date().toISOString() },
+    const { data, error } = await supa.from('predictions').upsert(
+      { username, match_id: matchId, home_score: home, away_score: away },
       { onConflict: 'username,match_id' }
-    );
+    ).select();
+    console.log('[DB] upsert pick', matchId, home, away, '→', error?.message || `saved (${data?.length ?? 0} rows)`);
     return error ? { ok: false, error } : { ok: true };
   }
 }
@@ -352,8 +359,8 @@ function savePrediction(matchId, home, away) {
     const h = parseInt(home) || 0, a = parseInt(away) || 0;
     _predictions[currentUser][matchId] = { home: h, away: a };
     dbSavePrediction(currentUser, matchId, h, a).then(res => {
-      if (!res.ok) { console.error('Pick save failed:', res.error); showToast('⚠️ Pick not saved – please try again', 'error'); }
-    });
+      if (!res.ok) { console.error('Pick save failed:', res.error); showToast('⚠️ Pick not saved: ' + (res.error?.message || 'unknown error'), 'error'); }
+    }).catch(err => { console.error('Pick save exception:', err); showToast('⚠️ Network error – pick not saved', 'error'); });
   }
   renderSidebarUser();
   updateHomePredCount();
