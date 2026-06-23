@@ -34,6 +34,21 @@ const STORAGE = {
 };
 
 // ── SUPABASE DB OPERATIONS ────────────────────────
+
+// Supabase server caps results at 1000 rows by default — paginate to fetch everything
+async function fetchAllRows(table) {
+  const PAGE = 1000;
+  let all = [], from = 0;
+  while (true) {
+    const { data, error } = await supa.from(table).select('*').range(from, from + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
 async function dbInit() {
   supa = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
     auth: {
@@ -42,19 +57,15 @@ async function dbInit() {
       detectSessionInUrl: false,
     }
   });
-  const [usersRes, predsRes, resultsRes, settingsRes] = await Promise.all([
-    supa.from('users').select('*'),
-    supa.from('predictions').select('*').limit(10000),
-    supa.from('match_results').select('*'),
-    supa.from('app_settings').select('*'),
+  const [usersData, predsData, resultsData, settingsData] = await Promise.all([
+    fetchAllRows('users'),
+    fetchAllRows('predictions'),
+    fetchAllRows('match_results'),
+    fetchAllRows('app_settings'),
   ]);
-  // Diagnostic logging — visible in browser DevTools Console
-  console.log('[DB] users:', usersRes.data?.length ?? 'null', usersRes.error?.message || '');
-  console.log('[DB] predictions:', predsRes.data?.length ?? 'null', predsRes.error?.message || '');
-  console.log('[DB] results:', resultsRes.data?.length ?? 'null', resultsRes.error?.message || '');
-  if (predsRes.error) showToast('⚠️ Could not load picks from database: ' + predsRes.error.message, 'error');
+  console.log('[DB] users:', usersData.length, '| predictions:', predsData.length, '| results:', resultsData.length);
   _users = {};
-  (usersRes.data || []).forEach(u => {
+  usersData.forEach(u => {
     _users[u.username] = {
       color: u.color, role: u.role || 'member', pin: u.pin,
       championPick: u.champion_pick || null, topScorerPick: u.top_scorer_pick || null,
@@ -62,15 +73,15 @@ async function dbInit() {
     };
   });
   _predictions = {};
-  (predsRes.data || []).forEach(p => {
+  predsData.forEach(p => {
     if (!_predictions[p.username]) _predictions[p.username] = {};
     _predictions[p.username][p.match_id] = { home: p.home_score, away: p.away_score };
   });
   _results = {};
-  (resultsRes.data || []).forEach(r => { _results[r.match_id] = { home: r.home_score, away: r.away_score }; });
+  resultsData.forEach(r => { _results[r.match_id] = { home: r.home_score, away: r.away_score }; });
   mergeResultsIntoMatches();
   _champion = null; _topScorer = null; _topScorers = []; _topAssists = []; KNOCKOUT = [];
-  (settingsRes.data || []).forEach(s => {
+  settingsData.forEach(s => {
     if (s.key === 'champion')         _champion  = s.value;
     if (s.key === 'top_scorer')       _topScorer = s.value;
     if (s.key === 'top_scorers_list') { try { _topScorers = JSON.parse(s.value); } catch(e) {} }
