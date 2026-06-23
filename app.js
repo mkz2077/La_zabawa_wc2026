@@ -35,7 +35,13 @@ const STORAGE = {
 
 // ── SUPABASE DB OPERATIONS ────────────────────────
 async function dbInit() {
-  supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+  supa = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    }
+  });
   const [usersRes, predsRes, resultsRes, settingsRes] = await Promise.all([
     supa.from('users').select('*'),
     supa.from('predictions').select('*'),
