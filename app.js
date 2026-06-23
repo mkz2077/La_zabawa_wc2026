@@ -78,12 +78,14 @@ function mergeResultsIntoMatches() {
 
 async function dbSavePrediction(username, matchId, home, away) {
   if (home === null) {
-    await supa.from('predictions').delete().eq('username', username).eq('match_id', matchId);
+    const { error } = await supa.from('predictions').delete().eq('username', username).eq('match_id', matchId);
+    return error ? { ok: false, error } : { ok: true };
   } else {
-    await supa.from('predictions').upsert(
+    const { error } = await supa.from('predictions').upsert(
       { username, match_id: matchId, home_score: home, away_score: away, updated_at: new Date().toISOString() },
       { onConflict: 'username,match_id' }
     );
+    return error ? { ok: false, error } : { ok: true };
   }
 }
 
@@ -337,14 +339,33 @@ function savePrediction(matchId, home, away) {
   if (!_predictions[currentUser]) _predictions[currentUser] = {};
   if (home === '' && away === '') {
     delete _predictions[currentUser][matchId];
-    dbSavePrediction(currentUser, matchId, null, null).catch(console.error);
+    dbSavePrediction(currentUser, matchId, null, null).then(res => {
+      if (!res.ok) { console.error('Pick delete failed:', res.error); showToast('⚠️ Could not remove pick – check your connection', 'error'); }
+    });
   } else {
     const h = parseInt(home) || 0, a = parseInt(away) || 0;
     _predictions[currentUser][matchId] = { home: h, away: a };
-    dbSavePrediction(currentUser, matchId, h, a).catch(console.error);
+    dbSavePrediction(currentUser, matchId, h, a).then(res => {
+      if (!res.ok) { console.error('Pick save failed:', res.error); showToast('⚠️ Pick not saved – please try again', 'error'); }
+    });
   }
   renderSidebarUser();
   updateHomePredCount();
+}
+
+function showToast(msg, type = 'info') {
+  const existing = document.getElementById('appToast');
+  if (existing) clearTimeout(existing._t);
+  const el = existing || document.createElement('div');
+  el.id = 'appToast';
+  el.className = 'app-toast' + (type === 'error' ? ' app-toast-error' : '');
+  el.textContent = msg;
+  if (!existing) document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('app-toast-show'));
+  el._t = setTimeout(() => {
+    el.classList.remove('app-toast-show');
+    setTimeout(() => el.remove(), 300);
+  }, 4500);
 }
 
 function calcLeaderboard() {
@@ -959,7 +980,7 @@ function renderPicksGrouped(preds) {
       const hInp = card.querySelector('[data-side="home"]');
       const aInp = card.querySelector('[data-side="away"]');
       savePrediction(mid, hInp.value, aInp.value);
-      renderPicks();
+      updatePredBadge(card, mid, hInp.value, aInp.value);
     });
   });
 }

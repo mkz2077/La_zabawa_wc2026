@@ -61,15 +61,16 @@
     <section class="section active" id="section-home">
       <div class="hero">
         <div class="hero-ball-wrap" aria-hidden="true">
+          <!-- Adidas Trionda 2026 – 4-panel pinwheel: Red (USA) · Blue (Canada) · Green (Mexico) · Cream -->
           <svg class="hero-ball-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <radialGradient id="ballGrad" cx="35%" cy="30%" r="65%">
-                <stop offset="0%" stop-color="#f5f5f5"/>
-                <stop offset="65%" stop-color="#c8c8c8"/>
-                <stop offset="100%" stop-color="#888"/>
+                <stop offset="0%" stop-color="rgba(255,255,255,0.45)"/>
+                <stop offset="60%" stop-color="rgba(0,0,0,0)"/>
+                <stop offset="100%" stop-color="rgba(0,0,0,0.28)"/>
               </radialGradient>
               <radialGradient id="ballGlow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stop-color="rgba(255,215,0,0.25)"/>
+                <stop offset="0%" stop-color="rgba(255,215,0,0.28)"/>
                 <stop offset="100%" stop-color="rgba(255,215,0,0)"/>
               </radialGradient>
               <filter id="bshadow" x="-20%" y="-20%" width="140%" height="140%">
@@ -77,20 +78,66 @@
               </filter>
               <clipPath id="bclip"><circle cx="100" cy="100" r="90"/></clipPath>
             </defs>
+
+            <!-- outer glow ring -->
             <circle cx="100" cy="100" r="98" fill="url(#ballGlow)"/>
-            <circle cx="100" cy="100" r="90" fill="url(#ballGrad)" filter="url(#bshadow)"/>
-            <g clip-path="url(#bclip)" fill="#111827" stroke="#2a2a2a" stroke-width="1.2">
-              <polygon points="100,62 118,75 111,96 89,96 82,75"/>
-              <polygon points="100,14 113,26 108,44 92,44 87,26"/>
-              <polygon points="154,44 167,58 161,78 143,76 139,58"/>
-              <polygon points="175,97 182,117 170,133 153,127 151,108"/>
-              <polygon points="148,152 155,170 140,181 123,173 121,153"/>
-              <polygon points="52,152 45,170 60,181 77,173 79,153"/>
-              <polygon points="25,97 18,117 30,133 47,127 49,108"/>
-              <polygon points="46,44 33,58 39,78 57,76 61,58"/>
+            <!-- base + drop shadow -->
+            <circle cx="100" cy="100" r="90" fill="#f0ebe0" filter="url(#bshadow)"/>
+
+            <!-- ── TRIONDA PANELS (curved pinwheel, each ~90° arc) ── -->
+            <!-- Seam geometry: 4 curved lines from center to diagonal edge points
+                 A=315° (163.6,36.4)  B=45° (163.6,163.6)
+                 C=135° (36.4,163.6)  D=225° (36.4,36.4)
+                 Each seam bows clockwise to create the pinwheel swirl. -->
+
+            <!-- Red – USA · right arc A→B (315°→45°) -->
+            <path clip-path="url(#bclip)" fill="#CC2027" d="
+              M 100,100
+              C 130,100 160,70  163.64,36.36
+              A 90,90 0 0,1     163.64,163.64
+              C 130,160 100,130 100,100 Z"/>
+
+            <!-- Blue – Canada · bottom arc B→C (45°→135°) -->
+            <path clip-path="url(#bclip)" fill="#0047AB" d="
+              M 100,100
+              C 100,130 130,160 163.64,163.64
+              A 90,90 0 0,1     36.36,163.64
+              C 40,130  70,100  100,100 Z"/>
+
+            <!-- Green – Mexico · left arc C→D (135°→225°) -->
+            <path clip-path="url(#bclip)" fill="#009A44" d="
+              M 100,100
+              C 70,100  40,130  36.36,163.64
+              A 90,90 0 0,1     36.36,36.36
+              C 70,40   100,70  100,100 Z"/>
+
+            <!-- Cream · top arc D→A (225°→315°) -->
+            <path clip-path="url(#bclip)" fill="#f0ebe0" d="
+              M 100,100
+              C 100,70  70,40   36.36,36.36
+              A 90,90 0 0,1     163.64,36.36
+              C 160,70  130,100 100,100 Z"/>
+
+            <!-- lighting overlay (top-left highlight → bottom-right shadow) -->
+            <circle clip-path="url(#bclip)" cx="100" cy="100" r="90" fill="url(#ballGrad)"/>
+
+            <!-- ── GOLD SEAM LINES ── -->
+            <g clip-path="url(#bclip)" fill="none" stroke="#C9A84C" stroke-width="2.5" stroke-linecap="round">
+              <path d="M 100,100 C 130,100 160,70  163.64,36.36"/>
+              <path d="M 100,100 C 100,130 130,160 163.64,163.64"/>
+              <path d="M 100,100 C 70,100  40,130  36.36,163.64"/>
+              <path d="M 100,100 C 100,70  70,40   36.36,36.36"/>
             </g>
-            <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(0,0,0,0.25)" stroke-width="2"/>
-            <ellipse cx="76" cy="68" rx="22" ry="15" fill="rgba(255,255,255,0.3)" transform="rotate(-25,76,68)"/>
+            <!-- outer seam ring -->
+            <circle cx="100" cy="100" r="90" fill="none" stroke="#C9A84C" stroke-width="1.5"/>
+
+            <!-- ── HOST NATION SYMBOLS ── -->
+            <text x="155" y="99"  text-anchor="middle" dominant-baseline="middle" font-size="20" fill="rgba(255,255,255,0.72)">★</text>
+            <text x="100" y="157" text-anchor="middle" dominant-baseline="middle" font-size="15" fill="rgba(255,255,255,0.72)">🍁</text>
+            <text x="46"  y="99"  text-anchor="middle" dominant-baseline="middle" font-size="15" fill="rgba(255,255,255,0.72)">🦅</text>
+
+            <!-- specular highlight -->
+            <ellipse cx="76" cy="68" rx="22" ry="15" fill="rgba(255,255,255,0.35)" transform="rotate(-25,76,68)"/>
           </svg>
           <div class="hero-ball-ring"></div>
         </div>
