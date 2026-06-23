@@ -44,7 +44,7 @@ async function dbInit() {
   });
   const [usersRes, predsRes, resultsRes, settingsRes] = await Promise.all([
     supa.from('users').select('*'),
-    supa.from('predictions').select('*'),
+    supa.from('predictions').select('*').limit(10000),
     supa.from('match_results').select('*'),
     supa.from('app_settings').select('*'),
   ]);
