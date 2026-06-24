@@ -725,12 +725,12 @@ function renderScheduleList(groupFilter) {
   });
 }
 
-function matchCard(m, preds, showPredictors = false) {
+function matchCard(m, preds, showPredictors = false, forceEditable = false) {
   const h   = TEAMS[m.home] || { iso2: null, name: m.home };
   const a   = TEAMS[m.away] || { iso2: null, name: m.away };
   const p          = preds[m.id];
   const hasResult  = m.homeScore !== null && m.awayScore !== null;
-  const matchLocked = isMatchLocked(m);
+  const matchLocked = isMatchLocked(m) && !forceEditable;
 
   let scoreHtml;
   if (hasResult) {
@@ -740,7 +740,7 @@ function matchCard(m, preds, showPredictors = false) {
   }
 
   let predHtml = '';
-  if (!hasResult) {
+  if (!hasResult && !forceEditable) {
     if (!currentUser) {
       predHtml = `<span style="font-size:12px;color:var(--text3);cursor:pointer" onclick="openLoginModal()">Sign in to predict</span>`;
     } else if (matchLocked) {
@@ -759,6 +759,19 @@ function matchCard(m, preds, showPredictors = false) {
         </div>
       `;
     }
+  } else if (forceEditable) {
+    // Admin edit mode — inputs shown for all matches including locked/completed
+    const hv = p ? p.home : '';
+    const av = p ? p.away : '';
+    predHtml = `
+      <div class="pred-inputs">
+        <input class="pred-input" type="number" min="0" max="20" value="${hv}" data-side="home" placeholder="–">
+        <span class="pred-sep">:</span>
+        <input class="pred-input" type="number" min="0" max="20" value="${av}" data-side="away" placeholder="–">
+        ${p ? `<span class="pred-saved" title="Saved">✓</span>` : ''}
+        <span class="pred-admin-badge">ADMIN</span>
+      </div>
+    `;
   } else if (p) {
     const pts = calcPredPts(p.home, p.away, m.homeScore, m.awayScore);
     predHtml = `
@@ -906,6 +919,7 @@ function calcGroupStandings() {
 // ── MY PICKS ──────────────────────────────────────
 function renderPicks() {
   renderSpecialPicksHome(); // bonus picks always shown at top of picks page
+  const adminEdit = isAdminLoggedIn() && !!currentUser;
   const el = document.getElementById('picksContent');
   if (!currentUser) {
     el.innerHTML = `
@@ -953,6 +967,7 @@ function renderPicks() {
   const bestGrp = Object.entries(grpPts).sort((a,b) => b[1].pts - a[1].pts)[0];
 
   el.innerHTML = `
+    ${adminEdit ? `<div class="admin-edit-banner">🔧 <strong>Admin Edit Mode</strong> — editing picks for <strong>${esc(currentUser)}</strong>. All matches are editable. Changes save immediately.</div>` : ''}
     <div class="card user-stats-card" style="margin-bottom:16px">
       <div class="card-title">📊 Your Stats</div>
       <div class="user-stats-grid">
@@ -973,10 +988,10 @@ function renderPicks() {
     <div id="picksGroupedList">Loading…</div>
   `;
 
-  renderPicksGrouped(preds);
+  renderPicksGrouped(preds, adminEdit);
 }
 
-function renderPicksGrouped(preds) {
+function renderPicksGrouped(preds, forceEditable = false) {
   const el = document.getElementById('picksGroupedList');
   if (!el) return;
 
@@ -993,7 +1008,7 @@ function renderPicksGrouped(preds) {
   el.innerHTML = Object.entries(byDate).sort().map(([, ms]) => `
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">${fmtWarsawDateLong(ms[0])}</div>
-      ${ms.map(m => matchCard(m, preds)).join('')}
+      ${ms.map(m => matchCard(m, preds, false, forceEditable)).join('')}
     </div>
   `).join('');
 

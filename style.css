@@ -873,6 +873,28 @@ body {
   .match-meta { min-width: unset; }
 }
 
+/* ── ADMIN EDIT MODE ── */
+.admin-edit-banner {
+  background: rgba(201,168,76,0.08);
+  border: 1px solid var(--gold2);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--gold);
+  margin-bottom: 14px;
+}
+.pred-admin-badge {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  background: var(--gold2);
+  color: #000;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 /* ── TOAST NOTIFICATION ── */
 .app-toast {
   position: fixed;
