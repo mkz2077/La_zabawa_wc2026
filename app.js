@@ -2028,25 +2028,132 @@ function renderBracket() {
     el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏆</div><h3>Bracket coming soon</h3><p>Group stage ends June 27. Admin will set up the knockout bracket once all teams are known.</p></div>`;
     return;
   }
-  const preds  = currentUser ? getPredictions(currentUser) : {};
-  const byRound = {};
-  KNOCKOUT.forEach(m => { if (!byRound[m.round]) byRound[m.round] = []; byRound[m.round].push(m); });
 
-  el.innerHTML = KO_ROUND_ORDER.filter(r => byRound[r]).map(r => `
-    <div style="margin-bottom:20px">
-      <div class="schedule-day-header"><span class="day-dot" style="background:var(--gold)"></span>${KO_ROUND_LABELS[r] || r}</div>
-      ${byRound[r].sort((a,b)=>new Date(a.utc)-new Date(b.utc)).map(m => knockoutMatchCard(m, preds)).join('')}
-    </div>
-  `).join('');
+  // Build id → match lookup
+  const byId = {};
+  KNOCKOUT.forEach(m => { byId[m.id] = m; });
 
-  el.querySelectorAll('.pred-input').forEach(inp => {
-    inp.addEventListener('change', () => {
-      const card = inp.closest('.match-card');
-      const mid  = card.dataset.matchId;
-      savePrediction(mid, card.querySelector('[data-side="home"]').value, card.querySelector('[data-side="away"]').value);
-      updatePredBadge(card, mid, card.querySelector('[data-side="home"]').value, card.querySelector('[data-side="away"]').value);
-    });
-  });
+  // Inner helper: render a single bracket match card
+  function bmcCard(m) {
+    if (!m) return `<div class="bmc"><div class="bmc-tbd">?</div></div>`;
+
+    const homeTeam = m.home ? TEAMS[m.home] : null;
+    const awayTeam = m.away ? TEAMS[m.away] : null;
+    const played   = m.homeScore !== null && m.awayScore !== null;
+    const hasPen   = played && m.homeScore === m.awayScore && m.penWinner;
+    const homeWin  = played && (m.homeScore > m.awayScore || (hasPen && m.penWinner === m.home));
+    const awayWin  = played && (m.awayScore > m.homeScore || (hasPen && m.penWinner === m.away));
+
+    function flagCircle(team, isWinner) {
+      const winCls = isWinner ? ' winner' : '';
+      if (!team) return `<div class="bmc-flag-c${winCls}"><span class="bmc-tbd">?</span></div>`;
+      const iso2 = (team.iso2 || '').toLowerCase();
+      return `<div class="bmc-flag-c${winCls}">${flag(iso2, 40)}</div>`;
+    }
+
+    const wk = warsawKickoff(m);
+    const scoreHtml = played
+      ? `<div class="bmc-score-wrap">${m.homeScore}–${m.awayScore}</div>`
+      : `<div class="bmc-score-wrap vs">–</div>`;
+    const penHtml = hasPen ? `<div class="bmc-pen">pen.</div>` : '';
+    const liveCls = (m.status === 'live') ? ' bmc-live' : (played ? ' bmc-done' : '');
+
+    return `<div class="bmc${liveCls}">
+  <div class="bmc-flags">
+    ${flagCircle(homeTeam, homeWin)}
+    ${scoreHtml}
+    ${flagCircle(awayTeam, awayWin)}
+  </div>
+  ${penHtml}
+  <div class="bmc-date">${wk.date}<br>${wk.time}</div>
+</div>`;
+  }
+
+  // Connector helpers
+  function straight4() {
+    return `<div class="bkt-conn-straight"><div></div><div></div><div></div><div></div></div>`;
+  }
+  function merge42() {
+    return `<div class="bkt-conn-merge"><div class="bkt-cl"></div><div class="bkt-cr"></div><div class="bkt-cl"></div><div class="bkt-cr"></div></div>`;
+  }
+  function merge21() {
+    return `<div class="bkt-conn-merge"><div class="bkt-cl"></div><div class="bkt-cr"></div></div>`;
+  }
+  function split12() {
+    return `<div class="bkt-conn-split"><div class="bkt-sl"></div><div class="bkt-sr"></div></div>`;
+  }
+  function split24() {
+    return `<div class="bkt-conn-split"><div class="bkt-sl"></div><div class="bkt-sr"></div><div class="bkt-sl"></div><div class="bkt-sr"></div></div>`;
+  }
+  function straight1() {
+    return `<div style="display:flex;height:14px;justify-content:center"><div style="width:40%;border-bottom:2px solid var(--border)"></div></div>`;
+  }
+
+  el.innerHTML = `
+<div class="bkt">
+  <!-- HALF A: R32 → Final -->
+  <div class="bkt-label">Round of 32</div>
+  <div class="bkt-row">
+    <div class="bkt-pod">${bmcCard(byId['KO_R32_01'])}${bmcCard(byId['KO_R32_04'])}</div>
+    <div class="bkt-pod">${bmcCard(byId['KO_R32_03'])}${bmcCard(byId['KO_R32_06'])}</div>
+    <div class="bkt-pod">${bmcCard(byId['KO_R32_12'])}${bmcCard(byId['KO_R32_11'])}</div>
+    <div class="bkt-pod">${bmcCard(byId['KO_R32_10'])}${bmcCard(byId['KO_R32_09'])}</div>
+  </div>
+  ${straight4()}
+  <div class="bkt-label">Round of 16</div>
+  <div class="bkt-row">
+    ${bmcCard(byId['KO_R16_17'])}${bmcCard(byId['KO_R16_18'])}${bmcCard(byId['KO_R16_21'])}${bmcCard(byId['KO_R16_22'])}
+  </div>
+  ${merge42()}
+  <div class="bkt-label">Quarter-finals</div>
+  <div class="bkt-row">
+    ${bmcCard(byId['KO_QF_25'])}${bmcCard(byId['KO_QF_26'])}
+  </div>
+  ${merge21()}
+  <div class="bkt-label">Semi-finals</div>
+  <div class="bkt-row" style="justify-content:center">
+    <div style="flex:0.5;max-width:180px">${bmcCard(byId['KO_SF_29'])}</div>
+  </div>
+  ${straight1()}
+
+  <!-- FINAL -->
+  <div class="bkt-label final-label">🏆 Final</div>
+  <div class="bkt-row" style="justify-content:center">
+    <div style="flex:0.4;max-width:160px">${bmcCard(byId['KO_Final_32'])}</div>
+  </div>
+
+  <!-- HALF B: reverse order -->
+  ${straight1()}
+  <div class="bkt-label">Semi-finals</div>
+  <div class="bkt-row" style="justify-content:center">
+    <div style="flex:0.5;max-width:180px">${bmcCard(byId['KO_SF_30'])}</div>
+  </div>
+  ${split12()}
+  <div class="bkt-label">Quarter-finals</div>
+  <div class="bkt-row">
+    ${bmcCard(byId['KO_QF_27'])}${bmcCard(byId['KO_QF_28'])}
+  </div>
+  ${split24()}
+  <div class="bkt-label">Round of 16</div>
+  <div class="bkt-row">
+    ${bmcCard(byId['KO_R16_19'])}${bmcCard(byId['KO_R16_20'])}${bmcCard(byId['KO_R16_23'])}${bmcCard(byId['KO_R16_24'])}
+  </div>
+  ${straight4()}
+  <div class="bkt-label">Round of 32</div>
+  <div class="bkt-row">
+    <div class="bkt-pod">${bmcCard(byId['KO_R32_02'])}${bmcCard(byId['KO_R32_05'])}</div>
+    <div class="bkt-pod">${bmcCard(byId['KO_R32_07'])}${bmcCard(byId['KO_R32_08'])}</div>
+    <div class="bkt-pod">${bmcCard(byId['KO_R32_15'])}${bmcCard(byId['KO_R32_14'])}</div>
+    <div class="bkt-pod">${bmcCard(byId['KO_R32_13'])}${bmcCard(byId['KO_R32_16'])}</div>
+  </div>
+
+  <!-- 3rd place -->
+  <div class="bkt-label" style="color:var(--text3);margin-top:8px">🥉 Third place</div>
+  <div class="bkt-row" style="justify-content:center">
+    <div style="flex:0.4;max-width:160px">${bmcCard(byId['KO_SF3_31'])}</div>
+  </div>
+</div>
+`;
 }
 
 function knockoutMatchCard(m, preds) {
@@ -2101,30 +2208,6 @@ function renderBracketAdminTab() {
   const teams = Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
 
   el.innerHTML = `
-    <div style="margin-bottom:16px">
-      <div class="card-title" style="margin-bottom:12px">Add Knockout Match</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-        <div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Round</div>
-          <select class="sp-select" id="koRound">
-            ${KO_ROUND_ORDER.map(r=>`<option value="${r}">${KO_ROUND_LABELS[r]}</option>`).join('')}
-          </select>
-        </div>
-        <div style="flex:1;min-width:160px">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">UTC date/time</div>
-          <input class="sp-input" id="koUtc" placeholder="2026-07-01T19:00:00Z" style="width:100%">
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Home label</div>
-          <input class="sp-input" id="koHomeLabel" placeholder="e.g. W73" style="width:80px">
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Away label</div>
-          <input class="sp-input" id="koAwayLabel" placeholder="e.g. W75" style="width:80px">
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="addKnockoutMatch()">Add Match</button>
-      </div>
-    </div>
     <div style="margin-bottom:10px;font-size:12px;color:var(--text3)">
       💡 Enter score → save. If draw after 90+30 min, pick penalty winner. Winners auto-advance to next round.
     </div>
