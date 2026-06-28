@@ -166,6 +166,8 @@ async function dbSaveKnockout(matches) {
   KNOCKOUT = matches;
   await supa.from('app_settings').upsert({ key: 'knockout_matches', value: JSON.stringify(matches) }, { onConflict: 'key' });
   renderBracket();
+  renderKnockoutSchedule();
+  if (currentUser) renderPicksKnockout();
 }
 
 async function dbLoadChat() {
@@ -188,6 +190,12 @@ function getUsers() {
     const preds = _predictions[name] || {};
     let pts = 0, exact = 0, winner = 0;
     MATCHES.forEach(m => {
+      if (m.homeScore === null || m.awayScore === null) return;
+      const p = preds[m.id]; if (!p) return;
+      if (p.home === m.homeScore && p.away === m.awayScore) { pts += 3; exact++; }
+      else if (Math.sign(p.home - p.away) === Math.sign(m.homeScore - m.awayScore)) { pts += 1; winner++; }
+    });
+    KNOCKOUT.forEach(m => {
       if (m.homeScore === null || m.awayScore === null) return;
       const p = preds[m.id]; if (!p) return;
       if (p.home === m.homeScore && p.away === m.awayScore) { pts += 3; exact++; }
@@ -478,7 +486,11 @@ function updateHomePredCount() {
   if (!el) return;
   if (!currentUser) { el.textContent = '0'; return; }
   const preds = getPredictions(currentUser);
-  el.textContent = Object.keys(preds).length;
+  // Count predictions only for matches with both teams known (group + KO)
+  let cnt = 0;
+  MATCHES.forEach(m => { if (preds[m.id] !== undefined) cnt++; });
+  KNOCKOUT.forEach(m => { if (m.home && m.away && preds[m.id] !== undefined) cnt++; });
+  el.textContent = cnt;
 }
 
 // ── MODAL ─────────────────────────────────────────
@@ -506,25 +518,28 @@ document.getElementById('loginModal').addEventListener('click', e => {
 function startCountdown() {
   function tick() {
     const now = Date.now();
-    const next = MATCHES
-      .filter(m => m.homeScore === null && m.awayScore === null)
-      .map(m => ({ m, t: new Date(m.utc).getTime() }))
-      .filter(x => x.t > now)
-      .sort((a, b) => a.t - b.t)[0];
+    const candidates = [
+      ...MATCHES.filter(m => m.homeScore === null && m.awayScore === null)
+        .map(m => ({ m, t: new Date(m.utc).getTime(), isKo: false })),
+      ...KNOCKOUT.filter(m => m.home && m.away && m.homeScore === null && m.awayScore === null)
+        .map(m => ({ m, t: new Date(m.utc).getTime(), isKo: true })),
+    ].filter(x => x.t > now).sort((a, b) => a.t - b.t);
+    const next = candidates[0];
 
     const cdEl = document.getElementById('countdown');
     if (!cdEl) return;
 
     if (!next) {
-      cdEl.querySelector('.countdown-label').textContent = 'Group stage complete';
+      cdEl.querySelector('.countdown-label').textContent = 'Tournament complete';
       ['cdDays','cdHours','cdMins','cdSecs'].forEach(id => { document.getElementById(id).textContent = '—'; });
       return;
     }
 
     const diff = next.t - now;
-    const h = TEAMS[next.m.home] || { name: next.m.home, iso2: null };
-    const a = TEAMS[next.m.away] || { name: next.m.away, iso2: null };
+    const h = TEAMS[next.m.home] || { name: next.m.homeLabel || next.m.home, iso2: null };
+    const a = TEAMS[next.m.away] || { name: next.m.awayLabel || next.m.away, iso2: null };
     const wk = warsawKickoff(next.m);
+    const phase = next.isKo ? (KO_ROUND_LABELS[next.m.round] || next.m.round) : `Group ${next.m.group}`;
 
     document.getElementById('cdDays').textContent  = Math.floor(diff / 86400000);
     document.getElementById('cdHours').textContent = Math.floor((diff % 86400000) / 3600000);
@@ -535,7 +550,7 @@ function startCountdown() {
     document.getElementById('countdownMatchTeams').innerHTML =
       `${flag(h.iso2, 18)} ${h.name} vs ${a.name} ${flag(a.iso2, 18)}`;
     document.getElementById('countdownMatchMeta').textContent =
-      `${wk.date} · ${wk.time} Warsaw · Group ${next.m.group}`;
+      `${wk.date} · ${wk.time} Warsaw · ${phase}`;
   }
   tick();
   setInterval(tick, 1000);
@@ -627,14 +642,19 @@ function renderHome() {
   const el = document.getElementById('homeMatchesPlayed');
   if (el) el.textContent = played;
 
-  // Upcoming matches (next 5 without results, sorted by kickoff time)
-  const upcoming = [...MATCHES]
-    .sort((a, b) => matchUTCDate(a) - matchUTCDate(b))
+  // Upcoming matches (next 5 without results — group + knockout)
+  const upcomingGroup = [...MATCHES]
     .filter(m => m.homeScore === null)
+    .map(m => ({ ...m, _isKo: false }));
+  const upcomingKo = KNOCKOUT
+    .filter(m => m.home && m.away && m.homeScore === null)
+    .map(m => ({ ...m, _isKo: true }));
+  const upcoming = [...upcomingGroup, ...upcomingKo]
+    .sort((a, b) => matchUTCDate(a) - matchUTCDate(b))
     .slice(0, 5);
   const upcomingEl = document.getElementById('homeUpcoming');
   if (!upcoming.length) {
-    upcomingEl.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">All group stage matches completed.</div>`;
+    upcomingEl.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">All matches completed.</div>`;
   } else {
     upcomingEl.innerHTML = upcoming.map(m => miniMatchCard(m)).join('');
   }
@@ -657,13 +677,16 @@ function renderHome() {
 }
 
 function miniMatchCard(m) {
-  const h  = TEAMS[m.home] || { iso2: null, name: m.home };
-  const a  = TEAMS[m.away] || { iso2: null, name: m.away };
+  const h  = TEAMS[m.home] || { iso2: null, name: m.homeLabel || m.home };
+  const a  = TEAMS[m.away] || { iso2: null, name: m.awayLabel || m.away };
   const wk = warsawKickoff(m);
+  const badge = m._isKo || m.round
+    ? `<span style="background:var(--gold2);color:#000;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px">${KO_ROUND_LABELS[m.round]||m.round||'KO'}</span>`
+    : `<span style="background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px">${m.group}</span>`;
   return `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(30,48,88,0.4);font-size:13px">
       ${matchStatusLamp(m)}
-      <span style="background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px">${m.group}</span>
+      ${badge}
       <span style="display:flex;align-items:center;gap:5px">${flag(h.iso2, 18)} ${h.name}</span>
       <span style="color:var(--text3);font-size:11px">vs</span>
       <span style="display:flex;align-items:center;gap:5px">${a.name} ${flag(a.iso2, 18)}</span>
@@ -674,7 +697,21 @@ function miniMatchCard(m) {
 
 // ── SCHEDULE ──────────────────────────────────────
 function renderSchedule() {
-  // Build filter buttons
+  // Phase tabs
+  const phaseTabs = document.getElementById('schedulePhaseTabs');
+  if (phaseTabs) {
+    phaseTabs.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        phaseTabs.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const phase = tab.dataset.phase;
+        document.getElementById('scheduleGroupPhase').style.display   = phase === 'group'   ? '' : 'none';
+        document.getElementById('scheduleKnockoutPhase').style.display = phase === 'knockout' ? '' : 'none';
+      });
+    });
+  }
+
+  // Build group filter buttons
   const filtersEl = document.getElementById('scheduleFilters');
   const groups = [...new Set(MATCHES.map(m => m.group))].sort();
   filtersEl.innerHTML = `<button class="filter-btn active" data-group="all">All</button>` +
@@ -689,6 +726,7 @@ function renderSchedule() {
   });
 
   renderScheduleList('all');
+  renderKnockoutSchedule();
 }
 
 function renderScheduleList(groupFilter) {
@@ -721,6 +759,41 @@ function renderScheduleList(groupFilter) {
       const aInp = card.querySelector('[data-side="away"]');
       savePrediction(mid, hInp.value, aInp.value);
       updatePredBadge(card, mid, hInp.value, aInp.value);
+    });
+  });
+}
+
+function renderKnockoutSchedule() {
+  const el = document.getElementById('scheduleKoList');
+  if (!el) return;
+  if (!KNOCKOUT.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏆</div><h3>Knockout bracket coming soon</h3></div>`;
+    return;
+  }
+  const preds = currentUser ? getPredictions(currentUser) : {};
+  const byRound = {};
+  KNOCKOUT.forEach(m => { if (!byRound[m.round]) byRound[m.round] = []; byRound[m.round].push(m); });
+
+  el.innerHTML = KO_ROUND_ORDER.filter(r => byRound[r]).map(r => `
+    <div class="schedule-day">
+      <div class="schedule-day-header"><span class="day-dot" style="background:var(--gold)"></span>${KO_ROUND_LABELS[r] || r}</div>
+      ${byRound[r].sort((a,b)=>new Date(a.utc)-new Date(b.utc)).map(m => {
+        if (!m.home || !m.away) return knockoutMatchCard(m, preds);
+        const savedGroup = m.group;
+        m.group = KO_ROUND_LABELS[m.round] || m.round;
+        const html = matchCard(m, preds, false);
+        m.group = savedGroup;
+        return html;
+      }).join('')}
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.pred-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const card = inp.closest('.match-card');
+      const mid  = card.dataset.matchId;
+      savePrediction(mid, card.querySelector('[data-side="home"]').value, card.querySelector('[data-side="away"]').value);
+      updatePredBadge(card, mid, card.querySelector('[data-side="home"]').value, card.querySelector('[data-side="away"]').value);
     });
   });
 }
@@ -799,8 +872,8 @@ function matchCard(m, preds, showPredictors = false, forceEditable = false) {
       <div class="match-pred-slot">${predHtml}</div>
       <div class="match-meta">
         <div class="match-meta-date">${wk.time} <span style="font-size:10px;opacity:.7">Warsaw</span></div>
-        <div>${wk.date} · ${m.city}</div>
-        <div style="font-size:10px;opacity:.6">${m.venue}</div>
+        <div>${wk.date}${m.city ? ' · ' + m.city : ''}</div>
+        ${m.venue ? `<div style="font-size:10px;opacity:.6">${m.venue}</div>` : ''}
       </div>
       ${showPredictors ? matchPredictorsHtml(m) : ''}
     </div>
@@ -840,6 +913,8 @@ function setupGroupsTabs() {
       if (!isStandings) renderBracket();
     });
   });
+  // Bracket is default — render it immediately
+  renderBracket();
 }
 
 function renderGroups() {
@@ -918,7 +993,7 @@ function calcGroupStandings() {
 
 // ── MY PICKS ──────────────────────────────────────
 function renderPicks() {
-  renderSpecialPicksHome(); // bonus picks always shown at top of picks page
+  renderSpecialPicksHome();
   const adminEdit = isAdminLoggedIn() && !!currentUser;
   const el = document.getElementById('picksContent');
   if (!currentUser) {
@@ -933,62 +1008,70 @@ function renderPicks() {
   }
 
   const preds   = getPredictions(currentUser);
-  const total   = MATCHES.length;
-  const made    = Object.keys(preds).length;
-  const played  = MATCHES.filter(m => m.homeScore !== null).length;
-  let earnedPts = 0, exact = 0, winner = 0;
-  MATCHES.forEach(m => {
-    if (m.homeScore === null) return;
+  const users   = getUsers();
+  const u       = users[currentUser];
+
+  // Compute stats across group + KO
+  let earnedPts = 0, exact = 0, winner = 0, predsOnPlayed = 0;
+  const allPlayed = [
+    ...MATCHES.filter(m => m.homeScore !== null),
+    ...KNOCKOUT.filter(m => m.homeScore !== null),
+  ];
+  allPlayed.forEach(m => {
     const p = preds[m.id]; if (!p) return;
+    predsOnPlayed++;
     const pts = calcPredPts(p.home, p.away, m.homeScore, m.awayScore);
     earnedPts += pts;
-    if (pts === 3) exact++;
-    else if (pts === 1) winner++;
+    if (pts === 3) exact++; else if (pts === 1) winner++;
   });
 
-  const users = getUsers();
-  const u = users[currentUser];
-
-  const predsOnPlayed = MATCHES.filter(m => m.homeScore !== null && preds[m.id]).length;
-  const accuracy    = predsOnPlayed ? Math.round((exact + winner) / predsOnPlayed * 100) : null;
-  const exactRate   = predsOnPlayed ? Math.round(exact / predsOnPlayed * 100) : null;
-  const bonusPts    = ((_champion && u.championPick === _champion) ? 4 : 0) +
-                      ((_topScorer && u.topScorerPick && u.topScorerPick.toLowerCase() === _topScorer.toLowerCase()) ? 5 : 0);
-
-  // best group
-  const grpPts = {};
-  MATCHES.forEach(m => {
-    if (m.homeScore === null) return;
-    const p = preds[m.id]; if (!p) return;
-    if (!grpPts[m.group]) grpPts[m.group] = { pts:0, n:0 };
-    grpPts[m.group].pts += calcPredPts(p.home, p.away, m.homeScore, m.awayScore);
-    grpPts[m.group].n++;
-  });
-  const bestGrp = Object.entries(grpPts).sort((a,b) => b[1].pts - a[1].pts)[0];
+  const koMade   = KNOCKOUT.filter(m => m.home && m.away && preds[m.id] !== undefined).length;
+  const grpMade  = MATCHES.filter(m => preds[m.id] !== undefined).length;
+  const totalMade = grpMade + koMade;
+  const accuracy  = predsOnPlayed ? Math.round((exact + winner) / predsOnPlayed * 100) : null;
+  const exactRate = predsOnPlayed ? Math.round(exact / predsOnPlayed * 100) : null;
+  const bonusPts  = ((_champion && u.championPick === _champion) ? 4 : 0) +
+                    ((_topScorer && u.topScorerPick && u.topScorerPick.toLowerCase() === _topScorer.toLowerCase()) ? 5 : 0);
 
   el.innerHTML = `
-    ${adminEdit ? `<div class="admin-edit-banner">🔧 <strong>Admin Edit Mode</strong> — editing picks for <strong>${esc(currentUser)}</strong>. All matches are editable. Changes save immediately.</div>` : ''}
+    ${adminEdit ? `<div class="admin-edit-banner">🔧 <strong>Admin Edit Mode</strong> — editing picks for <strong>${esc(currentUser)}</strong>.</div>` : ''}
     <div class="card user-stats-card" style="margin-bottom:16px">
       <div class="card-title">📊 Your Stats</div>
       <div class="user-stats-grid">
-        <div class="us-item"><div class="us-val">${made}<span class="us-den">/${total}</span></div><div class="us-lbl">Picks filled</div></div>
+        <div class="us-item"><div class="us-val">${totalMade}</div><div class="us-lbl">Total picks</div></div>
         <div class="us-item"><div class="us-val">${earnedPts + bonusPts}</div><div class="us-lbl">Total pts</div></div>
         <div class="us-item"><div class="us-val" style="color:var(--green)">${accuracy !== null ? accuracy+'%' : '–'}</div><div class="us-lbl">Accuracy</div></div>
         <div class="us-item"><div class="us-val" style="color:var(--gold)">${exactRate !== null ? exactRate+'%' : '–'}</div><div class="us-lbl">Exact rate</div></div>
         <div class="us-item"><div class="us-val">${exact}</div><div class="us-lbl">Exact scores ⭐</div></div>
         <div class="us-item"><div class="us-val">${winner}</div><div class="us-lbl">Correct result ✓</div></div>
         <div class="us-item"><div class="us-val" style="color:var(--gold)">${bonusPts > 0 ? '+'+bonusPts : '–'}</div><div class="us-lbl">Bonus pts 🏆</div></div>
-        <div class="us-item"><div class="us-val">${bestGrp ? `<span style="font-size:13px">Grp ${bestGrp[0]}</span>` : '–'}</div><div class="us-lbl">Best group${bestGrp ? ' ('+bestGrp[1].pts+' pts)' : ''}</div></div>
+        <div class="us-item"><div class="us-val">${grpMade}<span style="font-size:11px;color:var(--text3)">/${MATCHES.length}</span></div><div class="us-lbl">Group picks</div></div>
       </div>
-      <div style="margin-top:10px;background:var(--bg3);border-radius:6px;height:6px;overflow:hidden">
-        <div style="background:var(--red);height:100%;width:${Math.round(made/total*100)}%;transition:width 0.5s"></div>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:5px">${made} / ${total} matches predicted · ${played} played so far</div>
     </div>
-    <div id="picksGroupedList">Loading…</div>
+    <div class="tabs" id="picksPhaseTabs">
+      <div class="tab" data-phase="group">⚽ Group Phase</div>
+      <div class="tab active" data-phase="knockout">🏆 Knockout Phase</div>
+    </div>
+    <div id="picksGroupPhase" style="display:none">
+      <div id="picksGroupedList">Loading…</div>
+    </div>
+    <div id="picksKoPhase">
+      <div id="picksKoList">Loading…</div>
+    </div>
   `;
 
+  document.querySelectorAll('#picksPhaseTabs .tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('#picksPhaseTabs .tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const phase = tab.dataset.phase;
+      document.getElementById('picksGroupPhase').style.display = phase === 'group' ? '' : 'none';
+      document.getElementById('picksKoPhase').style.display    = phase === 'knockout' ? '' : 'none';
+    });
+  });
+
   renderPicksGrouped(preds, adminEdit);
+  renderPicksKnockout(preds, adminEdit);
 }
 
 function renderPicksGrouped(preds, forceEditable = false) {
@@ -1022,6 +1105,138 @@ function renderPicksGrouped(preds, forceEditable = false) {
       updatePredBadge(card, mid, hInp.value, aInp.value);
     });
   });
+}
+
+function renderPicksKnockout(preds, forceEditable = false) {
+  const el = document.getElementById('picksKoList');
+  if (!el) return;
+  if (!preds) preds = getPredictions(currentUser);
+
+  const now = Date.now();
+  const available = KNOCKOUT.filter(m => m.home && m.away);
+
+  if (!available.length) {
+    el.innerHTML = `<div class="empty-state" style="padding:40px 20px">
+      <div class="empty-state-icon">🏆</div>
+      <h3>Knockout picks coming soon</h3>
+      <p style="color:var(--text2)">Team slots will unlock as the Round of 32 results are confirmed.</p>
+    </div>`;
+    return;
+  }
+
+  const byRound = {};
+  available.forEach(m => {
+    if (!byRound[m.round]) byRound[m.round] = [];
+    byRound[m.round].push(m);
+  });
+
+  const roundOrder = ['R32','R16','QF','SF','Final','3rd'];
+
+  el.innerHTML = roundOrder.filter(r => byRound[r]).map(r => {
+    const ms = byRound[r].sort((a,b) => new Date(a.utc) - new Date(b.utc));
+    const label = KO_ROUND_LABELS[r] || r;
+    return `
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">${label}</div>
+        ${ms.map(m => {
+          const kickoff    = new Date(m.utc);
+          const isLocked   = !forceEditable && now >= kickoff.getTime();
+          const p          = preds[m.id];
+          const hasScore   = m.homeScore !== null && m.awayScore !== null;
+          const pts        = hasScore && p ? calcPredPts(p.home, p.away, m.homeScore, m.awayScore) : null;
+          const warsawDate = kickoff.toLocaleString('en-GB',{timeZone:'Europe/Warsaw',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+          const teamH      = TEAMS[m.home] || { name: m.homeLabel || m.home, iso2: null };
+          const teamA      = TEAMS[m.away] || { name: m.awayLabel || m.away, iso2: null };
+          const flagH      = flag(teamH.iso2, 20);
+          const flagA      = flag(teamA.iso2, 20);
+          const nameH      = teamH.name;
+          const nameA      = teamA.name;
+
+          let badge = '';
+          if (hasScore && pts !== null) {
+            if (pts === 3) badge = `<span class="pred-badge exact">⭐ +3</span>`;
+            else if (pts === 1) badge = `<span class="pred-badge winner">✓ +1</span>`;
+            else badge = `<span class="pred-badge miss">✗ 0</span>`;
+          } else if (isLocked && !p) {
+            badge = `<span class="pred-badge miss">Missed</span>`;
+          } else if (!isLocked && p !== undefined) {
+            badge = `<span class="pred-badge" style="background:var(--card2);color:var(--text2)">${p.home}–${p.away}</span>`;
+          }
+
+          const resultStr = hasScore
+            ? `<span style="font-size:11px;color:var(--text2)">${m.homeScore}–${m.awayScore}${m.penWinner ? ' (pen)' : ''}</span>`
+            : '';
+
+          return `
+            <div class="match-card ko-pick-card" data-match-id="${m.id}" style="padding:12px;border-bottom:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <span style="font-size:10px;background:var(--gold);color:#000;border-radius:4px;padding:1px 6px;font-weight:700">${label}</span>
+                <span style="font-size:11px;color:var(--text3)">${warsawDate} CEST</span>
+                ${resultStr}
+                <div style="margin-left:auto">${badge}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                ${flagH}
+                <span style="flex:1;font-weight:600;font-size:14px">${esc(nameH)}</span>
+                ${isLocked ? `
+                  <span style="color:var(--text3);min-width:60px;text-align:center;font-size:15px">${p ? p.home+'–'+p.away : '–'}</span>
+                ` : `
+                  <input class="pred-input ko-pred" type="number" min="0" max="20" data-side="home" data-match-id="${m.id}"
+                    value="${p !== undefined ? p.home : ''}" style="width:36px;text-align:center">
+                  <span style="color:var(--text3)">–</span>
+                  <input class="pred-input ko-pred" type="number" min="0" max="20" data-side="away" data-match-id="${m.id}"
+                    value="${p !== undefined ? p.away : ''}" style="width:36px;text-align:center">
+                `}
+                <span style="flex:1;font-weight:600;font-size:14px;text-align:right">${esc(nameA)}</span>
+                ${flagA}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>`;
+  }).join('');
+
+  el.querySelectorAll('.ko-pred').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const mid  = inp.dataset.matchId;
+      const card = el.querySelector(`[data-match-id="${mid}"]`);
+      const hInp = card.querySelector('[data-side="home"]');
+      const aInp = card.querySelector('[data-side="away"]');
+      if (hInp.value === '' || aInp.value === '') return;
+      savePrediction(mid, +hInp.value, +aInp.value);
+    });
+  });
+}
+
+// ── STREAK HELPER ─────────────────────────────────
+function calcUserStreak(username) {
+  const preds = getPredictions(username);
+  // Collect all played matches sorted by UTC date (oldest first)
+  const played = [
+    ...MATCHES.filter(m => m.homeScore !== null),
+    ...KNOCKOUT.filter(m => m.homeScore !== null),
+  ].sort((a, b) => new Date(a.utc || a.date) - new Date(b.utc || b.date));
+
+  // Build per-match points for this user (only matches they predicted)
+  const matchPts = played
+    .filter(m => preds[m.id] !== undefined)
+    .map(m => {
+      const p = preds[m.id];
+      return calcPredPts(p.home, p.away, m.homeScore, m.awayScore);
+    });
+
+  if (!matchPts.length) return { fire: false, cold: false };
+
+  // On fire: scored points in each of last 3 predicted matches, OR 6+ pts in last 3
+  const last3 = matchPts.slice(-3);
+  const last3pts = last3.reduce((s, p) => s + p, 0);
+  const fire = last3.length >= 3 && (last3.every(p => p > 0) || last3pts >= 6);
+
+  // Cold: no points in last 2 predicted matches
+  const last2 = matchPts.slice(-2);
+  const cold = last2.length >= 2 && last2.every(p => p === 0);
+
+  return { fire, cold };
 }
 
 // ── LEADERBOARD ───────────────────────────────────
@@ -1076,6 +1291,10 @@ function renderLeaderboard() {
           const scorerCell = scorerPick
             ? `<span style="font-size:12px;${scorerHit?'color:var(--green);font-weight:700':''}">${esc(scorerPick)}${scorerHit?' ✓':''}</span>`
             : `<span style="color:var(--text3);font-size:11px">—</span>`;
+          const streak   = calcUserStreak(u.name);
+          const streakBadge = streak.fire ? ' <span title="On fire! Points in last 3 matches">🔥</span>'
+                            : streak.cold ? ' <span title="Cold streak – no points in last 2 matches">🥶</span>'
+                            : '';
           return `
             <tr class="${isMe ? 'lb-me' : ''}${isTop3 ? ' lb-top3' : ''}">
               <td>
@@ -1087,7 +1306,7 @@ function renderLeaderboard() {
               <td>
                 <div class="lb-user">
                   <div class="user-avatar" style="background:${u.color};width:32px;height:32px;font-size:12px">${u.name.slice(0,2).toUpperCase()}</div>
-                  <span style="font-weight:${isMe?'800':'600'}">${esc(u.name)}${isMe ? ' <span style="font-size:11px;color:var(--gold)">★ you</span>' : ''}</span>
+                  <span style="font-weight:${isMe?'800':'600'}">${esc(u.name)}${isMe ? ' <span style="font-size:11px;color:var(--gold)">★ you</span>' : ''}${streakBadge}</span>
                 </div>
               </td>
               <td class="lb-pts">${u.points}</td>
@@ -1100,6 +1319,9 @@ function renderLeaderboard() {
     </table>
     <div style="margin-top:12px;font-size:12px;color:var(--text3)">
       🟢 Exact = 3 pts &nbsp;·&nbsp; 🔵 Winner/draw = 1 pt &nbsp;·&nbsp; 🏆 Champion = 4 pts &nbsp;·&nbsp; ⚽ Top scorer = 5 pts
+    </div>
+    <div style="margin-top:6px;font-size:12px;color:var(--text3)">
+      🔥 On fire (points in last 3 matches or 6+ pts in last 3) &nbsp;·&nbsp; 🥶 Cold streak (no points in last 2 matches)
     </div>
   `;
 }
@@ -1781,6 +2003,18 @@ async function sendChat() {
 const KO_ROUND_ORDER  = ['R32','R16','QF','SF','SF3','Final'];
 const KO_ROUND_LABELS = { R32:'Round of 32', R16:'Round of 16', QF:'Quarter-finals', SF:'Semi-finals', SF3:'Third Place', Final:'Final' };
 
+// Maps internal KO match IDs → Wikipedia match numbers (for auto-advancement via labels)
+const KO_WIKI_MAP = {
+  'KO_R32_01':73,'KO_R32_02':76,'KO_R32_03':74,'KO_R32_04':75,
+  'KO_R32_05':78,'KO_R32_06':77,'KO_R32_07':79,'KO_R32_08':80,
+  'KO_R32_09':82,'KO_R32_10':81,'KO_R32_11':84,'KO_R32_12':83,
+  'KO_R32_13':85,'KO_R32_14':88,'KO_R32_15':86,'KO_R32_16':87,
+  'KO_R16_17':89,'KO_R16_18':90,'KO_R16_19':91,'KO_R16_20':92,
+  'KO_R16_21':93,'KO_R16_22':94,'KO_R16_23':95,'KO_R16_24':96,
+  'KO_QF_25':97,'KO_QF_26':98,'KO_QF_27':99,'KO_QF_28':100,
+  'KO_SF_29':101,'KO_SF_30':102,
+};
+
 function renderBracket() {
   const el = document.getElementById('bracketContent');
   if (!el) return;
@@ -1827,10 +2061,31 @@ function knockoutMatchCard(m, preds) {
         </div>
       </div>`;
   }
-  const savedGroup = m.group;
+
+  // Build a temporary match object compatible with matchCard
+  const saved = { group: m.group };
   m.group = KO_ROUND_LABELS[m.round] || m.round;
+
+  // Inject penalty info into score display if needed
+  const hasPen = m.homeScore !== null && m.awayScore !== null && m.homeScore === m.awayScore && m.penWinner;
+  if (hasPen) {
+    const origHome = m.homeScore, origAway = m.awayScore;
+    // Override score display temporarily to show pen
+    m._penLabel = m.penWinner === m.home ? '(pen.)' : null;
+  }
+
   const html = matchCard(m, preds);
-  m.group = savedGroup;
+  m.group = saved.group;
+  delete m._penLabel;
+
+  // Inject penalty badge into card
+  if (hasPen) {
+    const penTeam = TEAMS[m.penWinner] || { name: m.penWinner };
+    return html.replace(
+      `<div class="match-score">${m.homeScore} : ${m.awayScore}</div>`,
+      `<div class="match-score" style="flex-direction:column;gap:2px">${m.homeScore} : ${m.awayScore}<span style="font-size:9px;color:var(--gold);font-weight:700">pen: ${esc(penTeam.name)}</span></div>`
+    );
+  }
   return html;
 }
 
@@ -1838,7 +2093,6 @@ function renderBracketAdminTab() {
   const el = document.getElementById('adminTabContent');
   if (!el) return;
   const teams = Object.values(TEAMS).sort((a,b)=>a.name.localeCompare(b.name));
-  const teamOpts = `<option value="">— TBD —</option>${teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}`;
 
   el.innerHTML = `
     <div style="margin-bottom:16px">
@@ -1852,48 +2106,70 @@ function renderBracketAdminTab() {
         </div>
         <div style="flex:1;min-width:160px">
           <div style="font-size:11px;color:var(--text3);margin-bottom:4px">UTC date/time</div>
-          <input class="sp-input" id="koUtc" placeholder="2026-06-29T17:00:00Z" style="width:100%">
+          <input class="sp-input" id="koUtc" placeholder="2026-07-01T19:00:00Z" style="width:100%">
         </div>
         <div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Home label</div>
-          <input class="sp-input" id="koHomeLabel" placeholder="e.g. 1A" style="width:80px">
+          <input class="sp-input" id="koHomeLabel" placeholder="e.g. W73" style="width:80px">
         </div>
         <div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Away label</div>
-          <input class="sp-input" id="koAwayLabel" placeholder="e.g. 2B" style="width:80px">
+          <input class="sp-input" id="koAwayLabel" placeholder="e.g. W75" style="width:80px">
         </div>
         <button class="btn btn-primary btn-sm" onclick="addKnockoutMatch()">Add Match</button>
       </div>
     </div>
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text3)">
+      💡 Enter score → save. If draw after 90+30 min, pick penalty winner. Winners auto-advance to next round.
+    </div>
     ${KNOCKOUT.length ? KNOCKOUT.map((m,i) => {
       const wk = warsawKickoff(m);
-      const ht = TEAMS[m.home] || null;
-      const at = TEAMS[m.away] || null;
+      const isDraw = m.homeScore !== null && m.awayScore !== null && m.homeScore === m.awayScore;
+      const homeTeamName = m.home ? (TEAMS[m.home]?.name || m.home) : m.homeLabel || '?';
+      const awayTeamName = m.away ? (TEAMS[m.away]?.name || m.away) : m.awayLabel || '?';
+      const penOpts = isDraw && m.home && m.away ? `
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--gold);font-weight:700">🏅 Penalty winner:</span>
+          <select class="sp-select" style="min-width:130px" onchange="setKoPenWinner(${i},this.value)">
+            <option value="">— not set —</option>
+            <option value="${m.home}" ${m.penWinner===m.home?'selected':''}>${esc(homeTeamName)}</option>
+            <option value="${m.away}" ${m.penWinner===m.away?'selected':''}>${esc(awayTeamName)}</option>
+          </select>
+          ${m.penWinner ? `<span class="admin-badge green">✓ ${esc(TEAMS[m.penWinner]?.name||m.penWinner)} wins on pens</span>` : ''}
+        </div>` : '';
+      const hasResult = m.homeScore !== null && m.awayScore !== null;
+      const resultBadge = hasResult
+        ? (isDraw && !m.penWinner
+            ? `<span class="admin-badge gold">Draw · set pen winner ↓</span>`
+            : `<span class="admin-badge green">✓ Result entered</span>`)
+        : '';
       return `
-        <div class="admin-match-row" style="flex-wrap:wrap">
+        <div class="admin-match-row" style="flex-wrap:wrap;gap:6px">
           <span class="match-group-badge" style="background:var(--gold2);color:#000">${KO_ROUND_LABELS[m.round]||m.round}</span>
           <div class="admin-match-teams">
-            <span class="admin-team">${m.homeLabel||'?'}</span>
+            <span class="admin-team">${esc(homeTeamName)}</span>
             <span style="color:var(--text3)">vs</span>
-            <span class="admin-team">${m.awayLabel||'?'}</span>
+            <span class="admin-team">${esc(awayTeamName)}</span>
           </div>
           <div class="admin-match-meta">🕐 ${wk.date} ${wk.time}</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          ${resultBadge}
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%">
             <select class="sp-select" style="min-width:130px" onchange="setKoTeam(${i},'home',this.value)">
-              ${`<option value="">— TBD —</option>${teams.map(t=>`<option value="${t.id}" ${m.home===t.id?'selected':''}>${t.name}</option>`).join('')}`}
+              <option value="">— TBD —</option>${teams.map(t=>`<option value="${t.id}" ${m.home===t.id?'selected':''}>${t.name}</option>`).join('')}
             </select>
-            <input class="pred-input" type="number" min="0" max="20" placeholder="–" value="${m.homeScore??''}" style="width:44px"
+            <input class="pred-input" type="number" min="0" max="30" placeholder="–" value="${m.homeScore??''}" style="width:44px"
               onchange="setKoScore(${i},'homeScore',this.value)">
             <span class="pred-sep">:</span>
-            <input class="pred-input" type="number" min="0" max="20" placeholder="–" value="${m.awayScore??''}" style="width:44px"
+            <input class="pred-input" type="number" min="0" max="30" placeholder="–" value="${m.awayScore??''}" style="width:44px"
               onchange="setKoScore(${i},'awayScore',this.value)">
             <select class="sp-select" style="min-width:130px" onchange="setKoTeam(${i},'away',this.value)">
-              ${`<option value="">— TBD —</option>${teams.map(t=>`<option value="${t.id}" ${m.away===t.id?'selected':''}>${t.name}</option>`).join('')}`}
+              <option value="">— TBD —</option>${teams.map(t=>`<option value="${t.id}" ${m.away===t.id?'selected':''}>${t.name}</option>`).join('')}
             </select>
             <button class="btn btn-ghost btn-sm" style="color:var(--red2)" onclick="removeKnockoutMatch(${i})">✕</button>
           </div>
+          ${penOpts}
         </div>`;
-    }).join('') : `<div style="color:var(--text3);font-size:13px;padding:12px 0">No knockout matches yet. Add them above.</div>`}`;
+    }).join('') : `<div style="color:var(--text3);font-size:13px;padding:12px 0">No knockout matches yet.</div>`}`;
 }
 
 async function addKnockoutMatch() {
@@ -1908,6 +2184,36 @@ async function addKnockoutMatch() {
   renderBracketAdminTab();
 }
 
+// Auto-advance knockout bracket: when match m has a clear winner,
+// propagate the winner/loser to the next-round match via label references (e.g. "W73", "L101")
+function autoAdvanceKnockout(changedMatch, matches) {
+  const wikiNum = KO_WIKI_MAP[changedMatch.id];
+  if (!wikiNum) return matches;
+
+  const hs = changedMatch.homeScore, as = changedMatch.awayScore;
+  if (hs === null || as === null) return matches;
+
+  let winner = null, loser = null;
+  if (hs > as)      { winner = changedMatch.home; loser = changedMatch.away; }
+  else if (as > hs) { winner = changedMatch.away; loser = changedMatch.home; }
+  else {
+    // Draw after 90 min → check penalty winner
+    winner = changedMatch.penWinner || null;
+    loser  = winner ? (winner === changedMatch.home ? changedMatch.away : changedMatch.home) : null;
+  }
+  if (!winner) return matches;
+
+  const wLabel = 'W' + wikiNum, lLabel = 'L' + wikiNum;
+  return matches.map(m => {
+    let updated = { ...m };
+    if (m.homeLabel === wLabel && m.home !== winner) updated.home = winner;
+    if (m.awayLabel === wLabel && m.away !== winner) updated.away = winner;
+    if (m.homeLabel === lLabel && m.home !== loser)  updated.home = loser;
+    if (m.awayLabel === lLabel && m.away !== loser)  updated.away = loser;
+    return updated;
+  });
+}
+
 async function setKoTeam(idx, side, teamId) {
   const matches = [...KNOCKOUT];
   matches[idx][side] = teamId || null;
@@ -1915,9 +2221,19 @@ async function setKoTeam(idx, side, teamId) {
 }
 
 async function setKoScore(idx, side, val) {
-  const matches = [...KNOCKOUT];
-  matches[idx][side] = val === '' ? null : parseInt(val);
+  let matches = [...KNOCKOUT];
+  matches[idx] = { ...matches[idx], [side]: val === '' ? null : parseInt(val) };
+  matches = autoAdvanceKnockout(matches[idx], matches);
   await dbSaveKnockout(matches);
+  renderLeaderboard(); renderHome();
+}
+
+async function setKoPenWinner(idx, teamId) {
+  let matches = [...KNOCKOUT];
+  matches[idx] = { ...matches[idx], penWinner: teamId || null };
+  matches = autoAdvanceKnockout(matches[idx], matches);
+  await dbSaveKnockout(matches);
+  renderLeaderboard(); renderHome();
 }
 
 async function removeKnockoutMatch(idx) {

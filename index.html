@@ -210,12 +210,21 @@
     <section class="section" id="section-schedule">
       <div class="page-header">
         <h1>⚽ Match Schedule</h1>
-        <p>All 72 group stage matches. Enter your predictions before kickoff.</p>
+        <p>All 104 matches. Enter your predictions before kickoff.</p>
       </div>
-      <div class="schedule-filters" id="scheduleFilters">
-        <button class="filter-btn active" data-group="all">All Groups</button>
+      <div class="tabs" id="schedulePhaseTabs">
+        <div class="tab" data-phase="group">Group Phase</div>
+        <div class="tab active" data-phase="knockout">🏆 Knockout Phase</div>
       </div>
-      <div id="scheduleList">Loading…</div>
+      <div id="scheduleGroupPhase" style="display:none">
+        <div class="schedule-filters" id="scheduleFilters">
+          <button class="filter-btn active" data-group="all">All Groups</button>
+        </div>
+        <div id="scheduleList">Loading…</div>
+      </div>
+      <div id="scheduleKnockoutPhase">
+        <div id="scheduleKoList">Loading…</div>
+      </div>
     </section>
 
     <!-- GROUPS -->
@@ -225,10 +234,10 @@
         <p>Top 2 + 8 best 3rd-place teams advance to the knockout stage.</p>
       </div>
       <div class="tabs" id="groupsBracketTabs">
-        <div class="tab active" data-tab="standings">Group Standings</div>
-        <div class="tab" data-tab="bracket">🏆 Knockout Bracket</div>
+        <div class="tab" data-tab="standings">Group Standings</div>
+        <div class="tab active" data-tab="bracket">🏆 Knockout Bracket</div>
       </div>
-      <div id="standingsView">
+      <div id="standingsView" style="display:none">
       <div class="groups-grid" id="groupsGrid">Loading…</div>
       <div style="margin-top:16px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;display:flex;gap:20px;flex-wrap:wrap;">
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);margin-right:5px;"></span>Advance (1st)</span>
@@ -236,7 +245,7 @@
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--gold2);margin-right:5px;"></span>Possible 3rd</span>
       </div>
       </div><!-- /standingsView -->
-      <div id="bracketView" style="display:none">
+      <div id="bracketView">
         <div id="bracketContent">Loading…</div>
       </div>
     </section>
