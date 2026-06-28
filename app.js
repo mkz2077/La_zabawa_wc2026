@@ -287,6 +287,10 @@ function isMatchLocked(m) {
 }
 
 // ── INIT ──────────────────────────────────────────
+function safeRun(label, fn) {
+  try { fn(); } catch(e) { console.error('[' + label + ']', e); }
+}
+
 async function init() {
   showLoadingOverlay(true);
   await loadData();
@@ -295,14 +299,14 @@ async function init() {
   restoreSession();
   renderSidebarUser();
   setupNav();
-  renderHome();
-  renderSchedule();
-  renderGroups();
-  renderLeaderboard();
-  renderStats();
-  renderPicks();
-  renderAdmin();
-  startCountdown();
+  safeRun('renderHome',       renderHome);
+  safeRun('renderSchedule',   renderSchedule);
+  safeRun('renderGroups',     renderGroups);
+  safeRun('renderLeaderboard',renderLeaderboard);
+  safeRun('renderStats',      renderStats);
+  safeRun('renderPicks',      renderPicks);
+  safeRun('renderAdmin',      renderAdmin);
+  safeRun('startCountdown',   startCountdown);
   setupRealtime();
   dbLoadChat();
 }
@@ -532,6 +536,8 @@ function startCountdown() {
     if (!next) {
       cdEl.querySelector('.countdown-label').textContent = 'Tournament complete';
       ['cdDays','cdHours','cdMins','cdSecs'].forEach(id => { document.getElementById(id).textContent = '—'; });
+      document.getElementById('countdownMatchTeams').textContent = '🏆 All matches complete';
+      document.getElementById('countdownMatchMeta').textContent  = '';
       return;
     }
 
@@ -1009,7 +1015,7 @@ function renderPicks() {
 
   const preds   = getPredictions(currentUser);
   const users   = getUsers();
-  const u       = users[currentUser];
+  const u       = users[currentUser] || {};
 
   // Compute stats across group + KO
   let earnedPts = 0, exact = 0, winner = 0, predsOnPlayed = 0;
