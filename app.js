@@ -63,7 +63,6 @@ async function dbInit() {
     fetchAllRows('match_results'),
     fetchAllRows('app_settings'),
   ]);
-  console.log(`[DB] loaded — users:${usersData.length} predictions:${predsData.length} results:${resultsData.length}`);
   _users = {};
   usersData.forEach(u => {
     _users[u.username] = {
@@ -86,8 +85,9 @@ async function dbInit() {
     if (s.key === 'top_scorer')       _topScorer = s.value;
     if (s.key === 'top_scorers_list') { try { _topScorers = JSON.parse(s.value); } catch(e) {} }
     if (s.key === 'top_assists_list') { try { _topAssists = JSON.parse(s.value); } catch(e) {} }
-    if (s.key === 'knockout_matches') { try { KNOCKOUT    = JSON.parse(s.value); } catch(e) {} }
+    if (s.key === 'knockout_matches') { try { KNOCKOUT    = JSON.parse(s.value); } catch(e) { console.error('[DB] knockout_matches parse error', e); } }
   });
+  console.log(`[DB] loaded — users:${usersData.length} predictions:${predsData.length} results:${resultsData.length} knockout:${KNOCKOUT.length} settings keys:[${settingsData.map(s=>s.key).join(',')}]`);
 }
 
 function mergeResultsIntoMatches() {
