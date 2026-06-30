@@ -407,7 +407,7 @@ function showToast(msg, type = 'info') {
 function calcLeaderboard() {
   return Object.entries(getUsers())
     .map(([name, u]) => ({ name, points: u.points, exact: u.exact, winner: u.winner, color: u.color }))
-    .sort((a, b) => b.points - a.points || b.exact - a.exact);
+    .sort((a, b) => b.points - a.points || b.exact - a.exact || b.winner - a.winner);
 }
 
 function loginExisting() {
@@ -787,7 +787,7 @@ function renderKnockoutSchedule() {
         if (!m.home || !m.away) return knockoutMatchCard(m, preds);
         const savedGroup = m.group;
         m.group = KO_ROUND_LABELS[m.round] || m.round;
-        const html = matchCard(m, preds, false);
+        const html = matchCard(m, preds, true);
         m.group = savedGroup;
         return html;
       }).join('')}
@@ -1264,6 +1264,15 @@ function renderLeaderboard() {
   const allUsers  = getUsers();
   const prevSnap  = getRankSnapshot();
   const MEDALS    = ['🥇','🥈','🥉'];
+
+  // Compute ranks with full tiebreaker — ex aequo when pts + exact + winner all match
+  const ranks = [];
+  lb.forEach((u, i) => {
+    if (i === 0) { ranks.push(1); return; }
+    const p = lb[i - 1];
+    ranks.push(u.points === p.points && u.exact === p.exact && u.winner === p.winner ? ranks[i - 1] : i + 1);
+  });
+
   el.innerHTML = `
     <table class="leaderboard-table">
       <thead>
@@ -1279,10 +1288,11 @@ function renderLeaderboard() {
         ${lb.map((u, i) => {
           const ud       = allUsers[u.name] || {};
           const isMe     = u.name === currentUser;
-          const isTop3   = i < 3;
-          const medal    = MEDALS[i] || '';
+          const rankNum  = ranks[i];
+          const isTop3   = rankNum <= 3;
+          const medal    = MEDALS[rankNum - 1] || '';
           const prevRank = prevSnap[u.name];
-          const diff     = prevRank ? prevRank - (i + 1) : 0;
+          const diff     = prevRank ? prevRank - rankNum : 0;
           const arrow    = diff > 0  ? `<span class="rank-up">▲${diff}</span>`
                          : diff < 0  ? `<span class="rank-dn">▼${Math.abs(diff)}</span>`
                          : prevRank  ? `<span class="rank-eq">—</span>` : '';
@@ -1305,7 +1315,7 @@ function renderLeaderboard() {
             <tr class="${isMe ? 'lb-me' : ''}${isTop3 ? ' lb-top3' : ''}">
               <td>
                 <div style="display:flex;align-items:center;gap:5px">
-                  <span class="lb-rank lb-medal${i}">${medal || (i+1)}</span>
+                  <span class="lb-rank lb-medal${rankNum - 1}">${medal || rankNum}</span>
                   ${arrow}
                 </div>
               </td>
@@ -1398,21 +1408,23 @@ function renderAllUsersStats(el) {
 // ── WHO PREDICTED CORRECTLY ────────────────────────
 function matchPredictorsHtml(m) {
   if (m.homeScore === null || m.awayScore === null) return '';
-  const exact = [], correct = [];
+  const exact = [], correct = [], wrong = [];
   for (const [username, upreds] of Object.entries(_predictions)) {
     const p = upreds[m.id]; if (!p) continue;
     const u = _users[username];
     const obj = { username, color: u?.color || '#555' };
     if (p.home === m.homeScore && p.away === m.awayScore) exact.push(obj);
     else if (Math.sign(p.home - p.away) === Math.sign(m.homeScore - m.awayScore)) correct.push(obj);
+    else wrong.push(obj);
   }
-  if (!exact.length && !correct.length) return '';
+  if (!exact.length && !correct.length && !wrong.length) return '';
   const avatars = (list, style) => list.map(u =>
     `<div title="${esc(u.username)}: ${(_predictions[u.username]||{})[m.id]?.home ?? '?'}:${(_predictions[u.username]||{})[m.id]?.away ?? '?'}" class="pred-avatar" style="background:${u.color};${style}">${u.username.slice(0,2).toUpperCase()}</div>`
   ).join('');
   return `<div class="match-predictors">
     ${exact.length  ? `<span class="pred-label" style="color:var(--green)">⭐</span>${avatars(exact,  'border:1.5px solid var(--green)')}`  : ''}
     ${correct.length? `<span class="pred-label" style="color:var(--gold2)">✓</span>${avatars(correct, 'border:1.5px solid var(--gold2)')}`  : ''}
+    ${wrong.length  ? `<span class="pred-label" style="color:var(--red2)">✗</span>${avatars(wrong,   'border:1.5px solid var(--red2);opacity:.7')}`  : ''}
   </div>`;
 }
 
