@@ -1628,8 +1628,16 @@ function submitAdminLogin() {
 
 // ── RANK SNAPSHOT (for position change arrows) ─────
 function snapshotRankings() {
+  const lb = calcLeaderboard();
   const snap = {};
-  calcLeaderboard().forEach((u, i) => { snap[u.name] = i + 1; });
+  const ranks = [];
+  lb.forEach((u, i) => {
+    const r = i === 0 ? 1
+      : (u.points === lb[i-1].points && u.exact === lb[i-1].exact && u.winner === lb[i-1].winner)
+        ? ranks[i-1] : i + 1;
+    ranks.push(r);
+    snap[u.name] = r;
+  });
   localStorage.setItem('wc2026_rank_snap', JSON.stringify(snap));
 }
 function getRankSnapshot() {
@@ -2322,6 +2330,7 @@ async function setKoTeam(idx, side, teamId) {
 }
 
 async function setKoScore(idx, side, val) {
+  snapshotRankings();
   let matches = [...KNOCKOUT];
   matches[idx] = { ...matches[idx], [side]: val === '' ? null : parseInt(val) };
   matches = autoAdvanceKnockout(matches[idx], matches);
@@ -2330,6 +2339,7 @@ async function setKoScore(idx, side, val) {
 }
 
 async function setKoPenWinner(idx, teamId) {
+  snapshotRankings();
   let matches = [...KNOCKOUT];
   matches[idx] = { ...matches[idx], penWinner: teamId || null };
   matches = autoAdvanceKnockout(matches[idx], matches);
