@@ -1345,9 +1345,9 @@ function renderLeaderboard() {
 
 // ── STATS ─────────────────────────────────────────
 function renderStats() {
-  // Calculate from match results
+  // Calculate from match results — group + knockout
   let played = 0, goals = 0;
-  MATCHES.forEach(m => {
+  [...MATCHES, ...KNOCKOUT].forEach(m => {
     if (m.homeScore === null) return;
     played++;
     goals += m.homeScore + m.awayScore;
@@ -1368,19 +1368,20 @@ function renderStats() {
 function renderAllUsersStats(el) {
   const lb = calcLeaderboard();
   if (!lb.length) { el.innerHTML = ''; return; }
+  const allPlayed = [...MATCHES, ...KNOCKOUT].filter(m => m.homeScore !== null);
   const rows = lb.map((u, i) => {
-    const preds    = _predictions[u.name] || {};
-    const played   = MATCHES.filter(m => m.homeScore !== null);
-    let exact = 0, winner = 0, total = 0;
-    played.forEach(m => {
+    const preds = _predictions[u.name] || {};
+    let exact = 0, winner = 0, total = 0, earnedPts = 0;
+    allPlayed.forEach(m => {
       const p = preds[m.id]; if (!p) return;
       total++;
       const pts = calcPredPts(p.home, p.away, m.homeScore, m.awayScore);
+      earnedPts += pts;
       if (pts === 3) exact++;
       else if (pts === 1) winner++;
     });
-    const acc   = total ? Math.round((exact+winner)/total*100) : null;
-    const ud    = _users[u.name] || {};
+    const acc    = total ? Math.round((exact+winner)/total*100) : null;
+    const ppm    = total ? (earnedPts / total).toFixed(2) : null;
     const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
     return `<tr>
       <td><span class="lb-rank ${rankClass}">${i+1}</span></td>
@@ -1392,6 +1393,7 @@ function renderAllUsersStats(el) {
       <td style="text-align:center;color:var(--green)">${exact}</td>
       <td style="text-align:center;color:var(--gold2)">${winner}</td>
       <td style="text-align:center">${acc !== null ? acc+'%' : '–'}</td>
+      <td style="text-align:center;color:var(--gold);font-weight:700">${ppm !== null ? ppm : '–'}</td>
       <td style="text-align:center;color:var(--text3);font-size:12px">${Object.keys(preds).length}</td>
     </tr>`;
   });
@@ -1399,7 +1401,7 @@ function renderAllUsersStats(el) {
     <div class="card" style="margin-top:16px">
       <div class="card-title">🏅 Predictor Rankings</div>
       <table class="leaderboard-table">
-        <thead><tr><th>#</th><th>Player</th><th style="text-align:right">Pts</th><th style="text-align:center">⭐ Exact</th><th style="text-align:center">✓ Correct</th><th style="text-align:center">Accuracy</th><th style="text-align:center">Picks</th></tr></thead>
+        <thead><tr><th>#</th><th>Player</th><th style="text-align:right">Pts</th><th style="text-align:center">⭐ Exact</th><th style="text-align:center">✓ Correct</th><th style="text-align:center">Accuracy</th><th style="text-align:center">Pts/match</th><th style="text-align:center">Picks</th></tr></thead>
         <tbody>${rows.join('')}</tbody>
       </table>
     </div>`;
