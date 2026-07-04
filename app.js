@@ -644,7 +644,7 @@ function renderSpecialPicksHome() {
 // ── HOME ──────────────────────────────────────────
 function renderHome() {
   updateHomePredCount();
-  const played = MATCHES.filter(m => m.homeScore !== null).length;
+  const played = [...MATCHES, ...KNOCKOUT].filter(m => m.homeScore !== null).length;
   const el = document.getElementById('homeMatchesPlayed');
   if (el) el.textContent = played;
 
