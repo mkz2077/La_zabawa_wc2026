@@ -304,6 +304,7 @@ async function init() {
   safeRun('renderGroups',     renderGroups);
   safeRun('renderLeaderboard',renderLeaderboard);
   safeRun('renderStats',      renderStats);
+  safeRun('renderRewards',    renderRewards);
   safeRun('renderPicks',      renderPicks);
   safeRun('renderAdmin',      renderAdmin);
   safeRun('startCountdown',   startCountdown);
@@ -1363,6 +1364,76 @@ function renderStats() {
 
   const userStatsEl = document.getElementById('userStatsSection');
   if (userStatsEl) renderAllUsersStats(userStatsEl);
+}
+
+// ── REWARDS ───────────────────────────────────────
+function renderRewards() {
+  const el = document.getElementById('rewardsContent');
+  if (!el) return;
+
+  const lb = calcLeaderboard();
+
+  // Leaderboard prizes — ranked by leaderboard position
+  const leaderboardPrizes = [
+    { place: 1, label: '1st Place', medal: '🥇', img: 'img/rewards/image4.png', name: 'High Sierra Curve backpack',     desc: 'Eco-friendly recycled backpack' },
+    { place: 2, label: '2nd Place', medal: '🥈', img: 'img/rewards/image2.png', name: 'Sports bag',                    desc: 'Spacious sports bag' },
+    { place: 3, label: '3rd Place', medal: '🥉', img: 'img/rewards/image1.png', name: 'Thermobottle 500ml',            desc: 'Insulated thermos bottle' },
+    { place: 4, label: '4th Place', medal: '4️⃣',  img: 'img/rewards/image3.png', name: 'Canvas tote bag',              desc: 'High-quality canvas tote bag' },
+    { place: 5, label: '5th Place', medal: '5️⃣',  img: 'img/rewards/image6.png', name: 'COB Torch with magnet',        desc: 'Compact torch with magnetic base' },
+  ];
+
+  // Random draw prizes
+  const randomPrizes = [
+    { img: 'img/rewards/image5.png', name: 'A5 Hardcover Notebook',   desc: 'White and Red hardcover notebook', qty: 2 },
+    { img: 'img/rewards/image7.png', name: 'COB Torch',               desc: 'Compact COB flashlight',           qty: 2 },
+  ];
+
+  function winnerHtml(place) {
+    const u = lb[place - 1];
+    if (!u) return `<div class="rwd-winner rwd-winner-tbd">TBD</div>`;
+    const isMe = u.name === currentUser;
+    const ud = _users[u.name] || {};
+    return `<div class="rwd-winner${isMe ? ' rwd-winner-me' : ''}">
+      <div class="user-avatar" style="background:${u.color || '#555'};width:28px;height:28px;font-size:11px">${u.name.slice(0,2).toUpperCase()}</div>
+      <span>${esc(u.name)}${isMe ? ' ★' : ''}</span>
+      <span class="rwd-pts">${u.points} pts</span>
+    </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="rwd-section-label">🏆 Leaderboard Prizes</div>
+    <p style="font-size:13px;color:var(--text3);margin:0 0 16px">Awarded to the top 5 players after the Final (July 19).</p>
+    <div class="rwd-grid">
+      ${leaderboardPrizes.map(p => `
+        <div class="rwd-card${p.place <= 3 ? ' rwd-card-top' : ''}">
+          <div class="rwd-badge">${p.medal} ${p.label}</div>
+          <div class="rwd-img-wrap">
+            <img src="${p.img}" alt="${esc(p.name)}" class="rwd-img" onerror="this.style.opacity='.2'">
+          </div>
+          <div class="rwd-name">${esc(p.name)}</div>
+          <div class="rwd-desc">${esc(p.desc)}</div>
+          <div class="rwd-currently">Currently leading:</div>
+          ${winnerHtml(p.place)}
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="rwd-section-label" style="margin-top:32px">🎲 Random Draw Prizes</div>
+    <p style="font-size:13px;color:var(--text3);margin:0 0 16px">Drawn randomly from all players not in the top 5 after the Final.</p>
+    <div class="rwd-grid rwd-grid-random">
+      ${randomPrizes.map(p => `
+        <div class="rwd-card rwd-card-random">
+          <div class="rwd-badge rwd-badge-random">🎲 Random Draw · ×${p.qty}</div>
+          <div class="rwd-img-wrap">
+            <img src="${p.img}" alt="${esc(p.name)}" class="rwd-img" onerror="this.style.opacity='.2'">
+          </div>
+          <div class="rwd-name">${esc(p.name)}</div>
+          <div class="rwd-desc">${esc(p.desc)}</div>
+          <div class="rwd-currently" style="margin-top:12px">${p.qty} lucky winners drawn after the Final</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function renderAllUsersStats(el) {
