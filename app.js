@@ -1384,7 +1384,7 @@ function renderRewards() {
 
   // Random draw prizes
   const randomPrizes = [
-    { img: 'img/rewards/image5.png', name: 'A5 Hardcover Notebook',   desc: 'White and Red hardcover notebook', qty: 2 },
+    { img: 'img/rewards/image8.png', name: 'Folding rule',             desc: 'Folding ruler',                    qty: 2 },
     { img: 'img/rewards/image7.png', name: 'COB Torch',               desc: 'Compact COB flashlight',           qty: 2 },
   ];
 
