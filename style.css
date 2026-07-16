@@ -1175,3 +1175,132 @@ body {
   color: var(--text3);
   font-weight: 400;
 }
+
+/* ── LUCKY DRAW ───────────────────────────────────── */
+.draw-layout {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.draw-wheel-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+.draw-canvas-wrap {
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px var(--gold), 0 8px 40px rgba(0,0,0,0.55);
+  line-height: 0;
+}
+#wheelCanvas {
+  border-radius: 50%;
+  display: block;
+  max-width: min(360px, calc(100vw - 48px));
+  height: auto;
+}
+.draw-btns {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.draw-announce {
+  background: linear-gradient(135deg, rgba(255,215,0,.14), rgba(255,160,0,.07));
+  border: 1px solid rgba(255,215,0,.45);
+  border-radius: 14px;
+  padding: 18px 20px 14px;
+  text-align: center;
+  animation: drawPop .4s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes drawPop {
+  from { opacity:0; transform: scale(.8) translateY(10px); }
+  to   { opacity:1; transform: scale(1)  translateY(0); }
+}
+.draw-announce-confetti { font-size: 28px; line-height: 1; margin-bottom: 8px; }
+.draw-announce-name {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--gold);
+  margin: 6px 0 4px;
+}
+.draw-announce-prize {
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+.draw-announce-img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 10px;
+  padding: 5px;
+}
+.draw-winners-col {
+  flex: 1;
+  min-width: 220px;
+}
+.draw-prizes-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.draw-prize-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.draw-prize-chip img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 4px;
+  padding: 2px;
+}
+.draw-prize-chip.taken {
+  opacity: .4;
+  text-decoration: line-through;
+}
+.draw-prize-taken {
+  margin-left: auto;
+  color: var(--green);
+  font-weight: 800;
+}
+.draw-winner-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 7px;
+  font-size: 13px;
+}
+.draw-winner-prize {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text2);
+  flex-shrink: 0;
+}
+.draw-winner-prize img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 4px;
+  padding: 2px;
+}

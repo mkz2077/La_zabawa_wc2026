@@ -24,6 +24,11 @@ let _topScorers  = [];   // [{name, team, count}]
 let _topAssists  = [];   // [{name, team, count}]
 let _chat        = [];   // [{id, username, message, color, created_at}]
 let KNOCKOUT     = [];   // knockout match objects
+let _drawWinners = [];   // [{name, color, prizeName, prizeImg}] — lucky draw results
+
+// Wheel animation state (local only, no persistence needed)
+let _wheelAngle = 0;
+let _wheelSpin  = false;
 
 // LocalStorage: only admin session + unlocks (not shared across users)
 const STORAGE = {
@@ -85,7 +90,8 @@ async function dbInit() {
     if (s.key === 'top_scorer')       _topScorer = s.value;
     if (s.key === 'top_scorers_list') { try { _topScorers = JSON.parse(s.value); } catch(e) {} }
     if (s.key === 'top_assists_list') { try { _topAssists = JSON.parse(s.value); } catch(e) {} }
-    if (s.key === 'knockout_matches') { try { KNOCKOUT    = JSON.parse(s.value); } catch(e) { console.error('[DB] knockout_matches parse error', e); } }
+    if (s.key === 'knockout_matches') { try { KNOCKOUT     = JSON.parse(s.value); } catch(e) { console.error('[DB] knockout_matches parse error', e); } }
+    if (s.key === 'draw_winners')    { try { _drawWinners = JSON.parse(s.value); } catch(e) {} }
   });
   console.log(`[DB] loaded — users:${usersData.length} predictions:${predsData.length} results:${resultsData.length} knockout:${KNOCKOUT.length} settings keys:[${settingsData.map(s=>s.key).join(',')}]`);
 }
@@ -1367,73 +1373,313 @@ function renderStats() {
 }
 
 // ── REWARDS ───────────────────────────────────────
+const DRAW_PRIZES = [
+  { name: 'Folding rule', img: 'img/rewards/image8.png' },
+  { name: 'Folding rule', img: 'img/rewards/image8.png' },
+  { name: 'COB Torch',    img: 'img/rewards/image7.png' },
+  { name: 'COB Torch',    img: 'img/rewards/image7.png' },
+];
+
+async function dbSaveDrawWinners() {
+  await supa.from('app_settings').upsert({ key: 'draw_winners', value: JSON.stringify(_drawWinners) }, { onConflict: 'key' });
+}
+
+function getDrawEligible() {
+  const lb = calcLeaderboard();
+  const top5 = new Set(lb.slice(0, 5).map(u => u.name));
+  const won  = new Set(_drawWinners.map(w => w.name));
+  return Object.entries(_users)
+    .filter(([n]) => !top5.has(n) && !won.has(n))
+    .map(([n, u]) => ({ name: n, color: u.color || '#4a6fa5' }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getDrawRemainingPrizes() {
+  const pool = [...DRAW_PRIZES];
+  _drawWinners.forEach(w => {
+    const idx = pool.findIndex(p => p.name === w.prizeName);
+    if (idx >= 0) pool.splice(idx, 1);
+  });
+  return pool;
+}
+
+function drawWheel() {
+  const canvas = document.getElementById('wheelCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const players = getDrawEligible();
+  const sz = canvas.width;
+  const cx = sz / 2, cy = sz / 2;
+  const r  = cx - 14;
+
+  ctx.clearRect(0, 0, sz, sz);
+
+  if (!players.length) {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#0f1c32'; ctx.fill();
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.fillStyle = '#7a9cc6'; ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(_drawWinners.length >= DRAW_PRIZES.length ? 'All prizes awarded!' : 'No eligible players', cx, cy);
+    drawWheelPointer(ctx, cx, sz);
+    return;
+  }
+
+  const n     = players.length;
+  const slice = (Math.PI * 2) / n;
+
+  // Segment palette — use player color, fallback to a set of contrasting colours
+  const FALLBACKS = ['#c0392b','#2980b9','#27ae60','#8e44ad','#e67e22','#16a085','#d35400','#2c3e50'];
+  players.forEach((p, i) => {
+    const startA = _wheelAngle - Math.PI / 2 + i * slice;
+    const endA   = startA + slice;
+
+    // Segment
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, startA, endA); ctx.closePath();
+    ctx.fillStyle = p.color || FALLBACKS[i % FALLBACKS.length];
+    ctx.fill();
+    ctx.strokeStyle = '#08111e'; ctx.lineWidth = 2; ctx.stroke();
+
+    // Name label — max 12 chars, radially outward
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(startA + slice / 2);
+    const fontSize = Math.max(9, Math.min(13, 130 / n));
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 4;
+    const label = p.name.length > 11 ? p.name.slice(0, 11) + '…' : p.name;
+    ctx.fillText(label, r - 10, fontSize / 3);
+    ctx.restore();
+  });
+
+  // Outer ring
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 4; ctx.stroke();
+
+  // Center hub
+  ctx.beginPath(); ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+  ctx.fillStyle = '#08111e'; ctx.fill();
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🎰', cx, cy);
+
+  drawWheelPointer(ctx, cx, sz);
+}
+
+function drawWheelPointer(ctx, cx, sz) {
+  // Gold triangle pointer pinned at top centre
+  const tip = 6, base = 14, height = 26;
+  ctx.save();
+  ctx.translate(cx, tip);
+  ctx.beginPath();
+  ctx.moveTo(-base / 2, 0);
+  ctx.lineTo(base / 2, 0);
+  ctx.lineTo(0, height);
+  ctx.closePath();
+  ctx.fillStyle = '#ffd700';
+  ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 6;
+  ctx.fill();
+  ctx.strokeStyle = '#08111e'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+}
+
+function spinWheel() {
+  if (_wheelSpin) return;
+  const players = getDrawEligible();
+  const prizes  = getDrawRemainingPrizes();
+  if (!players.length || !prizes.length) return;
+
+  _wheelSpin = true;
+  const spinBtn = document.getElementById('spinBtn');
+  if (spinBtn) spinBtn.disabled = true;
+
+  // Hide previous announcement
+  const ann = document.getElementById('wheelAnnounce');
+  if (ann) ann.style.display = 'none';
+
+  const n          = players.length;
+  const slice      = (Math.PI * 2) / n;
+  const winnerIdx  = Math.floor(Math.random() * n);
+
+  // Target angle so winnerIdx segment centre lands at pointer (top)
+  // Segment i centre = _wheelAngle - π/2 + (i + 0.5) * slice  →  must equal -π/2
+  // ⟹ _wheelAngle + (i + 0.5) * slice ≡ 0 (mod 2π)
+  // ⟹ target = -(winnerIdx + 0.5) * slice  (mod 2π)
+  const rawTarget  = -(winnerIdx + 0.5) * slice;
+  const normTarget = ((rawTarget % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const normCur    = ((_wheelAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  let   delta      = normTarget - normCur;
+  if (delta <= 0.05) delta += Math.PI * 2;
+
+  const totalSpin  = delta + (5 + Math.floor(Math.random() * 4)) * Math.PI * 2;
+  const startAngle = _wheelAngle;
+  const startTime  = performance.now();
+  const duration   = 4500;
+
+  function animate(now) {
+    const t      = Math.min((now - startTime) / duration, 1);
+    const eased  = 1 - Math.pow(1 - t, 3);   // cubic ease-out
+    _wheelAngle  = startAngle + totalSpin * eased;
+    drawWheel();
+    if (t < 1) { requestAnimationFrame(animate); return; }
+
+    // Spin done
+    _wheelAngle = startAngle + totalSpin;
+    drawWheel();
+    _wheelSpin  = false;
+
+    const winner = players[winnerIdx];
+    const prize  = prizes[Math.floor(Math.random() * prizes.length)];
+    _drawWinners = [..._drawWinners, { name: winner.name, color: winner.color, prizeName: prize.name, prizeImg: prize.img }];
+    dbSaveDrawWinners();
+    updateDrawUI(winner, prize);
+  }
+  requestAnimationFrame(animate);
+}
+
+async function resetDraw() {
+  if (!confirm('Reset the lucky draw? All drawn winners will be cleared.')) return;
+  _drawWinners = [];
+  await dbSaveDrawWinners();
+  _wheelAngle  = 0;
+  drawWheel();
+  updateDrawUI(null, null);
+}
+
+function updateDrawUI(latestWinner, latestPrize) {
+  // Announcement banner
+  const ann = document.getElementById('wheelAnnounce');
+  if (ann) {
+    if (latestWinner && latestPrize) {
+      ann.innerHTML = `<div class="draw-announce">
+        <div class="draw-announce-confetti">🎉</div>
+        <div class="user-avatar" style="background:${latestWinner.color};width:44px;height:44px;font-size:17px;display:flex;align-items:center;justify-content:center;border-radius:50%;margin:0 auto 6px">${latestWinner.name.slice(0,2).toUpperCase()}</div>
+        <div class="draw-announce-name">${esc(latestWinner.name)}</div>
+        <div class="draw-announce-prize">wins a <strong>${esc(latestPrize.name)}</strong></div>
+        <img src="${latestPrize.img}" class="draw-announce-img" onerror="this.style.opacity='.2'">
+      </div>`;
+      ann.style.display = 'block';
+    } else {
+      ann.style.display = 'none';
+    }
+  }
+
+  // Winners list
+  const list = document.getElementById('drawWinnersList');
+  if (list) {
+    if (!_drawWinners.length) {
+      list.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">No winners yet — spin the wheel!</div>`;
+    } else {
+      list.innerHTML = _drawWinners.map((w, i) => `
+        <div class="draw-winner-item">
+          <span style="font-size:11px;color:var(--text3);min-width:18px">#${i+1}</span>
+          <div class="user-avatar" style="background:${w.color};width:30px;height:30px;font-size:11px;flex-shrink:0">${w.name.slice(0,2).toUpperCase()}</div>
+          <span style="font-weight:700;font-size:13px">${esc(w.name)}</span>
+          <div class="draw-winner-prize">
+            <img src="${w.prizeImg}" onerror="this.style.opacity='.2'">
+            <span>${esc(w.prizeName)}</span>
+          </div>
+        </div>`).join('');
+    }
+  }
+
+  // Spin button state
+  const spinBtn = document.getElementById('spinBtn');
+  if (spinBtn) {
+    const canSpin = getDrawEligible().length > 0 && getDrawRemainingPrizes().length > 0;
+    spinBtn.disabled = !canSpin;
+    spinBtn.textContent = canSpin ? '🎰 Spin the Wheel' : '✅ All prizes drawn';
+  }
+}
+
 function renderRewards() {
   const el = document.getElementById('rewardsContent');
   if (!el) return;
 
   const lb = calcLeaderboard();
 
-  // Leaderboard prizes — ranked by leaderboard position
   const leaderboardPrizes = [
-    { place: 1, label: '1st Place', medal: '🥇', img: 'img/rewards/image4.png', name: 'High Sierra Curve backpack',     desc: 'Eco-friendly recycled backpack' },
-    { place: 2, label: '2nd Place', medal: '🥈', img: 'img/rewards/image2.png', name: 'Sports bag',                    desc: 'Spacious sports bag' },
-    { place: 3, label: '3rd Place', medal: '🥉', img: 'img/rewards/image1.png', name: 'Thermobottle 500ml',            desc: 'Insulated thermos bottle' },
-    { place: 4, label: '4th Place', medal: '4️⃣',  img: 'img/rewards/image3.png', name: 'Canvas tote bag',              desc: 'High-quality canvas tote bag' },
-    { place: 5, label: '5th Place', medal: '5️⃣',  img: 'img/rewards/image6.png', name: 'COB Torch with magnet',        desc: 'Compact torch with magnetic base' },
-  ];
-
-  // Random draw prizes
-  const randomPrizes = [
-    { img: 'img/rewards/image8.png', name: 'Folding rule',             desc: 'Folding ruler',                    qty: 2 },
-    { img: 'img/rewards/image7.png', name: 'COB Torch',               desc: 'Compact COB flashlight',           qty: 2 },
+    { place: 1, medal: '🥇', label: '1st Place', img: 'img/rewards/image4.png', name: 'High Sierra Curve backpack', desc: 'Eco-friendly recycled backpack' },
+    { place: 2, medal: '🥈', label: '2nd Place', img: 'img/rewards/image2.png', name: 'Sports bag',                desc: 'Spacious sports bag' },
+    { place: 3, medal: '🥉', label: '3rd Place', img: 'img/rewards/image1.png', name: 'Thermobottle 500ml',        desc: 'Insulated thermos bottle' },
+    { place: 4, medal: '4️⃣',  label: '4th Place', img: 'img/rewards/image3.png', name: 'Canvas tote bag',          desc: 'High-quality canvas tote bag' },
+    { place: 5, medal: '5️⃣',  label: '5th Place', img: 'img/rewards/image6.png', name: 'COB Torch with magnet',    desc: 'Compact torch with magnetic base' },
   ];
 
   function winnerHtml(place) {
     const u = lb[place - 1];
     if (!u) return `<div class="rwd-winner rwd-winner-tbd">TBD</div>`;
     const isMe = u.name === currentUser;
-    const ud = _users[u.name] || {};
     return `<div class="rwd-winner${isMe ? ' rwd-winner-me' : ''}">
-      <div class="user-avatar" style="background:${u.color || '#555'};width:28px;height:28px;font-size:11px">${u.name.slice(0,2).toUpperCase()}</div>
-      <span>${esc(u.name)}${isMe ? ' ★' : ''}</span>
+      <div class="user-avatar" style="background:${u.color||'#555'};width:26px;height:26px;font-size:10px">${u.name.slice(0,2).toUpperCase()}</div>
+      <span>${esc(u.name)}${isMe?' ★':''}</span>
       <span class="rwd-pts">${u.points} pts</span>
     </div>`;
   }
+
+  const prizesLeft = getDrawRemainingPrizes().length;
+  const canSpin    = getDrawEligible().length > 0 && prizesLeft > 0;
 
   el.innerHTML = `
     <div class="rwd-section-label">🏆 Leaderboard Prizes</div>
     <p style="font-size:13px;color:var(--text3);margin:0 0 16px">Awarded to the top 5 players after the Final (July 19).</p>
     <div class="rwd-grid">
       ${leaderboardPrizes.map(p => `
-        <div class="rwd-card${p.place <= 3 ? ' rwd-card-top' : ''}">
+        <div class="rwd-card${p.place<=3?' rwd-card-top':''}">
           <div class="rwd-badge">${p.medal} ${p.label}</div>
-          <div class="rwd-img-wrap">
-            <img src="${p.img}" alt="${esc(p.name)}" class="rwd-img" onerror="this.style.opacity='.2'">
-          </div>
+          <div class="rwd-img-wrap"><img src="${p.img}" alt="${esc(p.name)}" class="rwd-img" onerror="this.style.opacity='.2'"></div>
           <div class="rwd-name">${esc(p.name)}</div>
           <div class="rwd-desc">${esc(p.desc)}</div>
           <div class="rwd-currently">Currently leading:</div>
           ${winnerHtml(p.place)}
-        </div>
-      `).join('')}
+        </div>`).join('')}
     </div>
 
-    <div class="rwd-section-label" style="margin-top:32px">🎲 Random Draw Prizes</div>
-    <p style="font-size:13px;color:var(--text3);margin:0 0 16px">Drawn randomly from all players not in the top 5 after the Final.</p>
-    <div class="rwd-grid rwd-grid-random">
-      ${randomPrizes.map(p => `
-        <div class="rwd-card rwd-card-random">
-          <div class="rwd-badge rwd-badge-random">🎲 Random Draw · ×${p.qty}</div>
-          <div class="rwd-img-wrap">
-            <img src="${p.img}" alt="${esc(p.name)}" class="rwd-img" onerror="this.style.opacity='.2'">
-          </div>
-          <div class="rwd-name">${esc(p.name)}</div>
-          <div class="rwd-desc">${esc(p.desc)}</div>
-          <div class="rwd-currently" style="margin-top:12px">${p.qty} lucky winners drawn after the Final</div>
+    <div class="rwd-section-label" style="margin-top:36px">🎰 Lucky Draw</div>
+    <p style="font-size:13px;color:var(--text3);margin:0 0 20px">Spin the wheel to pick a random winner from players not in the top 5. Each winner is removed from subsequent spins.</p>
+
+    <div class="draw-layout">
+      <div class="draw-wheel-col">
+        <div class="draw-canvas-wrap">
+          <canvas id="wheelCanvas" width="360" height="360"></canvas>
         </div>
-      `).join('')}
+        <div class="draw-btns">
+          <button id="spinBtn" class="btn btn-primary" onclick="spinWheel()" ${canSpin?'':'disabled'}>
+            ${canSpin ? '🎰 Spin the Wheel' : '✅ All prizes drawn'}
+          </button>
+          <button class="btn btn-ghost" onclick="resetDraw()">🔄 Reset</button>
+        </div>
+        <div id="wheelAnnounce" style="display:none"></div>
+      </div>
+
+      <div class="draw-winners-col">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">
+          🎁 Prizes remaining: ${prizesLeft} / ${DRAW_PRIZES.length}
+        </div>
+        <div class="draw-prizes-left" style="margin-bottom:16px">
+          ${DRAW_PRIZES.map((p, i) => {
+            const taken = i < _drawWinners.length;
+            return `<div class="draw-prize-chip${taken?' taken':''}">
+              <img src="${p.img}" onerror="this.style.opacity='.2'">
+              <span>${esc(p.name)}</span>
+              ${taken?'<span class="draw-prize-taken">✓</span>':''}
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">🏆 Winners</div>
+        <div id="drawWinnersList"></div>
+      </div>
     </div>
   `;
+
+  // Draw wheel and populate winners list after DOM is ready
+  requestAnimationFrame(() => {
+    drawWheel();
+    updateDrawUI(null, null);
+  });
 }
 
 function renderAllUsersStats(el) {
