@@ -1137,7 +1137,7 @@ function renderPicksKnockout(preds, forceEditable = false) {
     byRound[m.round].push(m);
   });
 
-  const roundOrder = ['R32','R16','QF','SF','Final','3rd'];
+  const roundOrder = ['R32','R16','QF','SF','Final','SF3'];
 
   el.innerHTML = roundOrder.filter(r => byRound[r]).map(r => {
     const ms = byRound[r].sort((a,b) => new Date(a.utc) - new Date(b.utc));
